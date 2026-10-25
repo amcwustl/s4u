@@ -14,9 +14,9 @@ canvas.width = FRAME_W; canvas.height = FRAME_H;
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
 let stream = null, playCtx = null, gain = null, anaCtx = null;
-let frameTimer = null, tickTimer = null, statusTimer = null;
+let frameTimer = null, tickTimer = null, statusTimer = null, frameReader = null;
 let pipeline = null, learner = null, log = null, settings = mergeSettings();
-let audioFeatures = null, t0 = 0, hasAudio = false, hasVideo = false;
+let audioFeatures = null, t0 = 0, hasAudio = false, hasVideo = false, lastFrameAt = 0, lastLum = null;
 
 const toSw = (msg) => chrome.runtime.sendMessage({ target: 'sw', ...msg }).catch(() => {});
 
@@ -41,18 +41,45 @@ async function applyActions(actions) {
   }
 }
 
-function grabFrame() {
-  if (!video.videoWidth) { hasVideo = false; return; }
-  hasVideo = true;
-  ctx.drawImage(video, 0, 0, FRAME_W, FRAME_H);
+function pushFrame(source) {
+  ctx.drawImage(source, 0, 0, FRAME_W, FRAME_H);
   const { data } = ctx.getImageData(0, 0, FRAME_W, FRAME_H);
-  pipeline.onFrame(toGray(data, FRAME_W, FRAME_H));
+  const gray = toGray(data, FRAME_W, FRAME_H);
+  let sum = 0; for (let i = 0; i < gray.length; i += 97) sum += gray[i];
+  lastLum = sum / Math.ceil(gray.length / 97);
+  lastFrameAt = performance.now();
+  pipeline.onFrame(gray);
+}
+
+// Preferred: read VideoFrames straight off the track. A <video> element in a hidden offscreen
+// document is not painted by Chrome, so drawing it yields black frames; the track processor is not
+// subject to that.
+async function readFrames(track) {
+  const processor = new MediaStreamTrackProcessor({ track });
+  const reader = processor.readable.getReader();
+  frameReader = reader;
+  let last = 0;
+  try {
+    for (;;) {
+      const { value: frame, done } = await reader.read();
+      if (done) break;
+      const now = performance.now();
+      if (now - last >= 450 && pipeline) { last = now; pushFrame(frame); }
+      frame.close();
+    }
+  } catch (e) { console.warn('frame reader ended', e.message); }
+}
+
+// Fallback for browsers without MediaStreamTrackProcessor: draw the <video> element.
+function grabFrame() {
+  if (!video.videoWidth || !pipeline) return;
+  pushFrame(video);
 }
 
 function tick(pcm) {
   const t = Math.round((performance.now() - t0) / 1000);
   const record = pipeline.tick(t, pcm);
-  toSw({ type: 'sample', record, hasAudio, hasVideo, components: learner.learned ? learner.components() : [] });
+  toSw({ type: 'sample', record, hasAudio, hasVideo, blackVideo: hasVideo && lastLum !== null && lastLum < 2, components: learner.learned ? learner.components() : [] });
 }
 
 async function start(msg) {
@@ -102,14 +129,21 @@ async function startInner({ streamId }) {
   } else {
     tickTimer = setInterval(() => tick(null), 1000);
   }
-  frameTimer = setInterval(grabFrame, 500);
-  statusTimer = setInterval(() => toSw({ type: 'status', armed: true, hasAudio, hasVideo, learned: learner.learned, progress: learner.progress }), 1000);
+  const videoTrack = stream.getVideoTracks()[0];
+  if (videoTrack && 'MediaStreamTrackProcessor' in self) readFrames(videoTrack);
+  else frameTimer = setInterval(grabFrame, 500);
+  statusTimer = setInterval(() => {
+    hasVideo = performance.now() - lastFrameAt < 2000;
+    toSw({ type: 'status', armed: true, hasAudio, hasVideo, blackVideo: hasVideo && lastLum !== null && lastLum < 2, lum: lastLum, learned: learner.learned, progress: learner.progress });
+  }, 1000);
   toSw({ type: 'badge', text: 'Learning…' });
 }
 
 async function stop(notify) {
   clearInterval(frameTimer); clearInterval(tickTimer); clearInterval(statusTimer);
   frameTimer = tickTimer = statusTimer = null;
+  if (frameReader) { frameReader.cancel().catch(() => {}); frameReader = null; }
+  lastFrameAt = 0; lastLum = null;
   if (pipeline) { pipeline.end(); pipeline = null; }
   if (gain) ramp(1, 50);
   if (stream) for (const tr of stream.getTracks()) { tr.onended = null; tr.stop(); }

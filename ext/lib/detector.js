@@ -9,7 +9,7 @@ export const DEFAULTS = {
   holdVis: 0.8, dipVis: 0.4, dipHoldSec: 3, ambientWindowSec: 30, ambientMax: 0.2,
   recoverVisFast: 0.85, recoverVisSlow: 0.4, recoverSlowFrames: 3,
   recoverSim: 0.70, recoverSimHits: 5, recoverSimWindow: 6,
-  coldGoneSec: 40, audioOnlyAdSec: 15, maxCommercialSec: 240,
+  coldGoneSec: 40, audioOnlyAdSec: 15, audioOnlyVoteWindow: 15, audioOnlyVoteHits: 12, maxCommercialSec: 240,
 };
 
 export class Detector {
@@ -21,6 +21,7 @@ export class Detector {
     this.adStreak = 0;
     this.adVotes = [];
     this.audioOnlyStreak = 0;
+    this.audioOnlyVotes = [];
     this.dipStreak = 0;
     this.recoverStreak = 0;
     this.simWindow = [];
@@ -31,7 +32,7 @@ export class Detector {
 
   _enter(state, reason) {
     this._state = state; this.reason = reason;
-    this.adStreak = 0; this.adVotes = []; this.audioOnlyStreak = 0; this.dipStreak = 0; this.recoverStreak = 0;
+    this.adStreak = 0; this.adVotes = []; this.audioOnlyStreak = 0; this.audioOnlyVotes = []; this.dipStreak = 0; this.recoverStreak = 0;
     this.simWindow = []; this.commercialSec = 0;
     if (state === 'GAME') this.goneSec = 0;
   }
@@ -60,6 +61,12 @@ export class Detector {
         // audio-only mode (no video / scoreboard never learned)
         this.audioOnlyStreak = adLike ? this.audioOnlyStreak + 1 : 0;
         if (this.audioOnlyStreak >= o.audioOnlyAdSec) { this._enter('COMMERCIAL', 'audio-only'); return this._verdict(); }
+        if (hasAd) {
+          this.audioOnlyVotes.push(s.adProb >= o.adVoteProb ? 1 : 0);
+          if (this.audioOnlyVotes.length > o.audioOnlyVoteWindow) this.audioOnlyVotes.shift();
+          const hits = this.audioOnlyVotes.reduce((a, b) => a + b, 0);
+          if (hits >= o.audioOnlyVoteHits) { this._enter('COMMERCIAL', 'audio-only-vote'); return this._verdict(); }
+        }
         return this._verdict();
       }
 

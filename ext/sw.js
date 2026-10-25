@@ -53,7 +53,7 @@ function toOffscreen(msg) { return chrome.runtime.sendMessage({ target: 'offscre
 function updateTitle() {
   const spotify = host.state.connected ? 'Spotify ✓' : 'Spotify ✗';
   const title = lastStatus?.armed
-    ? `Commercial Switcher: ${lastBadge || 'armed'}${settings.shadow ? ' [SHADOW]' : ''} — ${spotify} — audio ${lastStatus.hasAudio ? 'yes' : 'NO'}, video ${lastStatus.hasVideo ? 'yes' : 'NO'}`
+    ? `Commercial Switcher: ${lastBadge || 'armed'}${settings.shadow ? ' [SHADOW]' : ''} — ${spotify} — audio ${lastStatus.hasAudio ? 'yes' : 'NO'}, video ${lastStatus.hasVideo ? (lastStatus.blackVideo ? 'BLACK' : 'yes') : 'NO'}`
     : lastError ? `Commercial Switcher: off — last error: ${lastError}` : 'Commercial Switcher: off';
   chrome.action.setTitle({ title });
 }

@@ -105,13 +105,13 @@ test('cold start: no audio profile yet, 40 s of absence mutes', () => {
   assert.equal(vs[39].reason, 'cold-start');
 });
 
-test('audio-only mode (no video): 15 s of ad probability mutes, game audio recovers', () => {
+test('audio-only mode (no video): sustained ad probability mutes after 12 s, game audio recovers', () => {
   const d = new Detector();
   run(d, seq(60, { scoreboardVis: null, logoVis: null }));
   const vs = run(d, seq(15, { scoreboardVis: null, logoVis: null, gameSim: 0.1, adProb: 0.9 }, 60));
-  assert.ok(vs.slice(0, 14).every(v => v.state === 'GAME'));
-  assert.equal(vs[14].state, 'COMMERCIAL');
-  assert.equal(vs[14].reason, 'audio-only');
+  assert.ok(vs.slice(0, 11).every(v => v.state === 'GAME'));
+  assert.equal(vs[11].state, 'COMMERCIAL');
+  assert.equal(vs[11].reason, 'audio-only-vote');
   const back = run(d, seq(5, { scoreboardVis: null, logoVis: null, gameSim: 0.8, adProb: 0.1 }, 75));
   assert.equal(back[4].state, 'GAME');
 });
@@ -175,4 +175,24 @@ test('announcer-level speech (0.45) is not ambient: ambientMax is 0.2', () => {
   const vs = run(d, seq(6, { ...AD, speech: 0.45, music: 0.0, adProb: 0.9 }, 60));
   assert.equal(firstT(vs, 'COMMERCIAL'), 64);
   assert.equal(DEFAULTS.ambientMax, 0.2);
+});
+
+test('audio-only mode also mutes on a majority vote: 12 of the last 15 s with adProb ≥ 0.5', () => {
+  const d = new Detector();
+  run(d, seq(60, { scoreboardVis: null, logoVis: null }));
+  // never 15 consecutive ≥ 0.75, but 12 of 15 ≥ 0.5
+  const probs = [0.6, 0.9, 0.4, 0.6, 0.8, 0.6, 0.3, 0.7, 0.9, 0.6, 0.6, 0.5, 0.8, 0.4, 0.6, 0.7];
+  const vs = run(d, probs.map((adProb, i) => ({ ...AD, scoreboardVis: null, logoVis: null, adProb, t: 60 + i })));
+  const t = firstT(vs, 'COMMERCIAL');
+  assert.equal(vs.find(v => v.t === t).reason, 'audio-only-vote');
+  assert.equal(t, 60 + 14); // 12th hit lands on the 15th sample
+  assert.equal(DEFAULTS.audioOnlyVoteHits, 12);
+});
+
+test('audio-only mode: scattered mild ad probability during play never votes', () => {
+  const d = new Detector();
+  run(d, seq(60, { scoreboardVis: null, logoVis: null }));
+  const probs = [0.5, 0.1, 0.0, 0.0, 0.4, 0.1, 0.4, 0.2, 0.4, 0.5, 0.5, 0.8, 0.3, 0.5, 0.1, 0.2, 0.3];
+  const vs = run(d, probs.map((adProb, i) => ({ ...AD, scoreboardVis: null, logoVis: null, adProb, gameSim: 1 - adProb, t: 60 + i })));
+  assert.ok(vs.every(v => v.state === 'GAME'));
 });

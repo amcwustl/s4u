@@ -31,13 +31,13 @@ port.onMessage.addListener((msg) => {
 });
 
 const fmt = (v) => (v === null || v === undefined ? '—' : typeof v === 'number' ? v.toFixed(2) : String(v));
-function render({ record: r, hasAudio, hasVideo }) {
+function render({ record: r, hasAudio, hasVideo, blackVideo }) {
   drawChart($('chart'), records);
   const rows = [
     ['t', r.t], ['scoreboardVis', r.scoreboardVis], ['logoVis', r.logoVis], ['gameSim', r.gameSim], ['adProb', r.adProb],
     ['speech', r.speech], ['music', r.music], ['silence', r.silence], ['lum', r.lum], ['rms', r.rms],
     ['goneSec', r.verdict?.goneSec], ['gameBank', r.gameBank], ['adBank', r.adBank],
-    ['learned', `${r.learned} (${Math.round((r.progress ?? 0) * 100)}%)`], ['audio/video', `${hasAudio ? 'yes' : 'NO'} / ${hasVideo ? 'yes' : 'NO'}`],
+    ['learned', `${r.learned} (${Math.round((r.progress ?? 0) * 100)}%)`], ['audio/video', `${hasAudio ? 'yes' : 'NO'} / ${hasVideo ? (blackVideo ? 'BLACK' : 'yes') : 'NO'}`],
   ];
   $('vals').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${fmt(v)}</td></tr>`).join('');
   $('state').innerHTML = `${r.verdict?.state} (${r.verdict?.reason}) ${r.muted ? `<span class="${r.shadow ? 'shadow' : 'muted'}">${r.shadow ? 'would be muted' : 'MUTED'}</span>` : ''} ${r.paused ? '⏸ paused' : ''}`;
