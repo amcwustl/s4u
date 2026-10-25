@@ -1,5 +1,27 @@
-// Service worker: toolbar toggle, hotkeys, offscreen lifecycle.
+// Service worker: toolbar toggle, hotkeys, offscreen lifecycle, native host port.
+import { createHostClient } from './lib/host-client.js';
+
 const OFFSCREEN_URL = 'offscreen.html';
+const HOST_NAME = 'com.s4u.spotify_host';
+
+const host = createHostClient({
+  connect: () => chrome.runtime.connectNative(HOST_NAME),
+  onState: () => updateTitle(),
+});
+async function hostSend(msg) {
+  try { return await host.send(msg); }
+  catch (e) { console.warn('host', msg.cmd, e.message); return { ok: false, error: e.message }; }
+}
+
+let lastStatus = null;
+function updateTitle() {
+  const armed = lastStatus?.armed;
+  const spotify = host.state.connected ? 'Spotify: connected' : 'Spotify: disconnected';
+  const title = armed
+    ? `Commercial Switcher: armed${manualMuted ? ' (MUTED)' : ''} — ${spotify} — audio ${lastStatus.hasAudio ? 'yes' : 'NO'}, video ${lastStatus.hasVideo ? 'yes' : 'NO'}`
+    : 'Commercial Switcher: off';
+  chrome.action.setTitle({ title });
+}
 
 async function getArmedTabId() {
   const { armedTabId = null } = await chrome.storage.session.get('armedTabId');
@@ -28,12 +50,15 @@ function toOffscreen(msg) {
 }
 
 async function disarm() {
+  if (manualMuted) await hostSend({ cmd: 'game' });
   await toOffscreen({ type: 'stop' });
   await closeOffscreen();
   await setArmedTabId(null);
   manualMuted = false;
+  host.stop();
+  lastStatus = null;
   await chrome.action.setBadgeText({ text: '' });
-  await chrome.action.setTitle({ title: 'Commercial Switcher: off' });
+  updateTitle();
 }
 
 async function arm(tab) {
@@ -41,8 +66,11 @@ async function arm(tab) {
   await ensureOffscreen();
   await setArmedTabId(tab.id);
   await toOffscreen({ type: 'start', streamId, tabId: tab.id });
+  host.start();
+  hostSend({ cmd: 'status' });
   await chrome.action.setBadgeText({ text: 'ON' });
-  await chrome.action.setTitle({ title: 'Commercial Switcher: armed' });
+  lastStatus = { armed: true, hasAudio: false, hasVideo: false };
+  updateTitle();
 }
 
 chrome.action.onClicked.addListener(async (tab) => {
@@ -59,14 +87,22 @@ chrome.commands.onCommand.addListener(async (command) => {
   if ((await getArmedTabId()) === null) return;
   if (command === 'toggle-mute') {
     manualMuted = !manualMuted;
-    await toOffscreen({ type: 'setGain', value: manualMuted ? 0 : 1 });
+    if (manualMuted) {
+      await toOffscreen({ type: 'setGain', value: 0 });
+      await hostSend({ cmd: 'commercial' });
+    } else {
+      await hostSend({ cmd: 'game' });
+      await toOffscreen({ type: 'setGain', value: 1 });
+    }
+    updateTitle();
   }
 });
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.target !== 'sw') return;
   if (msg.type === 'status') {
-    if (msg.armed === false) disarm();
-    else chrome.action.setTitle({ title: `Commercial Switcher: armed (audio ${msg.hasAudio ? 'yes' : 'NO'}, video ${msg.hasVideo ? 'yes' : 'NO'}, lum ${msg.luminance?.toFixed(0)})` });
+    if (msg.armed === false) { disarm(); return; }
+    lastStatus = msg;
+    updateTitle();
   }
 });
