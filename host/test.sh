@@ -45,6 +45,9 @@ if grep -q 'open -gj -a Spotify' "$FAKE_LOG" && has "$r" 'r.ok===true'; then
   openLine=$(grep -n 'open -gj' "$FAKE_LOG" | head -1 | cut -d: -f1); playLine=$(grep -n 'to play' "$FAKE_LOG" | head -1 | cut -d: -f1)
   [ "$openLine" -lt "$playLine" ] && pass "launches Spotify before play" || fail "open after play"
 else fail "launch: $r $(cat $FAKE_LOG)"; fi
+export FAKE_RUNNING=false; rm -f "$FAKE_RUNNING_FILE"
+r=$(run '{"cmd":"commercial","launch":false}')
+! grep -q 'open -gj' "$FAKE_LOG" && has "$r" 'r.ok===true && r.running===false' && pass "launch:false does not open Spotify" || fail "launch:false: $r $(cat $FAKE_LOG)"
 export FAKE_RUNNING=true
 
 r=$(run '{"cmd":"bogus"}')

@@ -66,6 +66,8 @@ func handle(_ msg: [String: Any]) -> [String: Any] {
     case "status":
         return status()
     case "commercial":
+        let launch = (msg["launch"] as? Bool) ?? true
+        if !launch && !isRunning() { return ["ok": true, "running": false] }
         guard ensureRunning() else { return ["ok": false, "running": false, "error": "could not launch Spotify"] }
         _ = osa("tell application \"Spotify\" to play")
         return ["ok": true, "running": true]
