@@ -9,7 +9,7 @@ export const DEFAULTS = {
   holdVis: 0.8, dipVis: 0.4, dipHoldSec: 3, ambientWindowSec: 30, ambientMax: 0.2,
   recoverVisFast: 0.85, recoverVisSlow: 0.4, recoverSlowFrames: 3,
   recoverSim: 0.70, recoverSimHits: 5, recoverSimWindow: 6,
-  coldGoneSec: 40, audioOnlyAdSec: 15, audioOnlyVoteWindow: 15, audioOnlyVoteHits: 12, maxCommercialSec: 240,
+  coldGoneSec: 40, audioOnlyAdSec: 15, audioOnlyVoteWindow: 15, audioOnlyVoteHits: 10, maxCommercialSec: 240,
 };
 
 export class Detector {

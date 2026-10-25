@@ -109,9 +109,9 @@ test('audio-only mode (no video): sustained ad probability mutes after 12 s, gam
   const d = new Detector();
   run(d, seq(60, { scoreboardVis: null, logoVis: null }));
   const vs = run(d, seq(15, { scoreboardVis: null, logoVis: null, gameSim: 0.1, adProb: 0.9 }, 60));
-  assert.ok(vs.slice(0, 11).every(v => v.state === 'GAME'));
-  assert.equal(vs[11].state, 'COMMERCIAL');
-  assert.equal(vs[11].reason, 'audio-only-vote');
+  assert.ok(vs.slice(0, 9).every(v => v.state === 'GAME'));
+  assert.equal(vs[9].state, 'COMMERCIAL');
+  assert.equal(vs[9].reason, 'audio-only-vote');
   const back = run(d, seq(5, { scoreboardVis: null, logoVis: null, gameSim: 0.8, adProb: 0.1 }, 75));
   assert.equal(back[4].state, 'GAME');
 });
@@ -177,7 +177,7 @@ test('announcer-level speech (0.45) is not ambient: ambientMax is 0.2', () => {
   assert.equal(DEFAULTS.ambientMax, 0.2);
 });
 
-test('audio-only mode also mutes on a majority vote: 12 of the last 15 s with adProb ≥ 0.5', () => {
+test('audio-only mode also mutes on a majority vote: 10 of the last 15 s with adProb ≥ 0.5', () => {
   const d = new Detector();
   run(d, seq(60, { scoreboardVis: null, logoVis: null }));
   // never 15 consecutive ≥ 0.75, but 12 of 15 ≥ 0.5
@@ -185,8 +185,8 @@ test('audio-only mode also mutes on a majority vote: 12 of the last 15 s with ad
   const vs = run(d, probs.map((adProb, i) => ({ ...AD, scoreboardVis: null, logoVis: null, adProb, t: 60 + i })));
   const t = firstT(vs, 'COMMERCIAL');
   assert.equal(vs.find(v => v.t === t).reason, 'audio-only-vote');
-  assert.equal(t, 60 + 14); // 12th hit lands on the 15th sample
-  assert.equal(DEFAULTS.audioOnlyVoteHits, 12);
+  assert.equal(t, 60 + 11); // 10th hit ≥ 0.5 lands on the 12th sample
+  assert.equal(DEFAULTS.audioOnlyVoteHits, 10);
 });
 
 test('audio-only mode: scattered mild ad probability during play never votes', () => {
