@@ -42,6 +42,8 @@ during commercials).
   the game returning.
 - Zero per-game setup beyond clicking the extension once after the game starts.
   No per-network calibration.
+- Clicking the icon again turns it fully off: tab audio restored, Spotify left
+  alone, no detection running. Aaron will often not want it enabled.
 - A single hotkey corrects a wrong decision immediately.
 - Everything runs locally. No accounts, no servers, no network calls.
 - A debug view and exportable log so thresholds can be tuned from real games.
@@ -76,6 +78,13 @@ These would make the tool a failure even if it technically works:
 
 - **Platform:** macOS 26.5, Google Chrome (current stable), Spotify desktop app
   installed at `/Applications/Spotify.app`.
+- **Viewing setup:** the game plays fullscreen in a Chrome window on a TV
+  connected over HDMI. Other Chrome windows are usually open on other displays
+  for work at the same time. The extension must act on exactly one tab and
+  leave every other window and tab untouched.
+- **Timeline:** first live test is today (2026-10-25). The build order must be
+  a thin end-to-end slice first (capture + mute, Spotify control, toggle,
+  override, shadow-mode log), with tuning tooling after real data exists.
 - **Source:** seasons4u, viewed in a Chrome tab. The video player may live in a
   cross-origin iframe. Whether the stream is DRM-protected is unknown (see
   risks, §9).
@@ -189,6 +198,11 @@ replays are never muted on a cold start.
   scoreboard leaves and returns.
 - `Alt+Shift+P`: pause automatic switching (remembered across sessions).
 
+Hotkeys are Chrome commands and fire when any Chrome window is focused, on
+any display. They do not fire when another app is frontmost; in that case the
+badge buttons in the game window are the correction path. A menu bar toggle in
+the native host is the v1.1 answer if that proves annoying.
+
 The controller owns the actual mute state and is the only thing that talks to
 the native host, so overrides and detector decisions can never disagree about
 what Spotify should be doing.
@@ -225,7 +239,9 @@ messages while already paused are harmless. Every message gets a reply so the
 extension can show "Spotify: connected" in the badge.
 
 An install script writes the native messaging manifest with the extension's ID
-and the absolute path to the host binary.
+and the absolute path to the host binary. The extension pins its own ID with a
+`key` field in `manifest.json` so reloading the unpacked extension never
+changes the ID (builder's call, removes the host-path risk in §9).
 
 ### 6.3 Sequencing on a transition
 
@@ -248,7 +264,13 @@ Spotify's own volume is never touched.
   on three labeled games, not measurements from seasons4u.
 - **Native host tests:** protocol framing round-trip; AppleScript invocation
   mocked; "Spotify not running" path.
-- **Manual acceptance (first Sunday):** run in shadow mode (detect and log, do
+- **Real footage before first contact:** `tools/tab-recorder.html` is a
+  throwaway page that records a seasons4u tab through the same tab-capture path
+  the extension uses (video + audio to .webm) and reports whether frames are
+  black. A recording spanning at least one break is the fixture for a
+  local-file playback test rig, so scoreboard learning and the audio banks are
+  validated on real footage before the first live run.
+- **Manual acceptance (first live run):** run in shadow mode (detect and log, do
   not switch) for one quarter, inspect the chart, then enable switching.
 
 ## 8. User flow
