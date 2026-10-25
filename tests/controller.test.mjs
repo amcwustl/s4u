@@ -82,3 +82,26 @@ test('end() unmutes if muted and reports Off', () => {
   c2.update(G);
   assert.deepEqual(c2.end(), [{ type: 'badge', text: 'Off' }]);
 });
+
+test('shadow: a logical "would mute" never sends Spotify or fade actions on end()', () => {
+  const c = new Controller({ shadow: true });
+  c.update(C);
+  assert.equal(c.muted, true);
+  assert.deepEqual(c.end(), [{ type: 'badge', text: 'Off' }]);
+});
+
+test('shadow: toggleMute during a "would mute" performs a real manual mute, and the next toggle a real unmute', () => {
+  const c = new Controller({ shadow: true });
+  c.update(C);
+  assert.deepEqual(c.toggleMute(), MUTE);
+  assert.equal(c.manual, true);
+  assert.deepEqual(c.toggleMute(), UNMUTE);
+});
+
+test('turning shadow off while armed makes the next break act for real', () => {
+  const c = new Controller({ shadow: true });
+  c.update(C); c.update(G);
+  c.shadow = false;
+  assert.deepEqual(c.update(C), MUTE);
+  assert.deepEqual(c.update(G), UNMUTE);
+});

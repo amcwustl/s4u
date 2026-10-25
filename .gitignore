@@ -1,5 +1,6 @@
-fixtures/
+/fixtures/
 host/.ext-key.pem
 host/bin/
 node_modules/
 .superpowers/
+.DS_Store

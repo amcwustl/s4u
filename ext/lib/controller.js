@@ -8,6 +8,7 @@ export class Controller {
   constructor({ shadow = false } = {}) {
     this.shadow = shadow;
     this._muted = false;     // logical mute state (in shadow mode: "would be muted")
+    this._real = false;      // whether the current mute actually faded the tab / started Spotify
     this._manual = false;
     this._paused = false;
     this.ignoreBreak = false;
@@ -19,12 +20,14 @@ export class Controller {
 
   _mute(auto) {
     this._muted = true;
-    if (auto && this.shadow) return [badge('SHADOW: would mute')];
+    if (auto && this.shadow) { this._real = false; return [badge('SHADOW: would mute')]; }
+    this._real = true;
     return MUTE_ACTIONS();
   }
   _unmute(auto, text) {
-    this._muted = false;
-    if (auto && this.shadow) return [badge('SHADOW: would unmute')];
+    const wasReal = this._real;
+    this._muted = false; this._real = false;
+    if (!wasReal) return [badge(auto ? 'SHADOW: would unmute' : text ?? 'Game')];
     return UNMUTE_ACTIONS(text);
   }
 
@@ -46,11 +49,12 @@ export class Controller {
   }
 
   toggleMute() {
-    if (this._muted) {
+    if (this._muted && this._real) {
       if (!this._manual) this.ignoreBreak = true;
       this._manual = false;
       return this._unmute(false);
     }
+    // not muted, or only "would be muted" in shadow: the user wants a real mute now
     this._manual = true;
     return this._mute(false);
   }
@@ -66,8 +70,8 @@ export class Controller {
   }
 
   end() {
-    const actions = this._muted ? UNMUTE_ACTIONS('Off') : [badge('Off')];
-    this._muted = false; this._manual = false; this.ignoreBreak = false; this.lastState = null;
+    const actions = this._muted && this._real ? UNMUTE_ACTIONS('Off') : [badge('Off')];
+    this._muted = false; this._real = false; this._manual = false; this.ignoreBreak = false; this.lastState = null;
     return actions;
   }
 }

@@ -28,15 +28,17 @@ function ramp(value, ms) {
   gain.gain.linearRampToValueAtTime(value, now + ms / 1000);
 }
 
-function applyActions(actions) {
-  const spotify = [];
+const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
+
+// Actions arrive in the controller's order (e.g. [spotify game, fadeIn]); Spotify commands are awaited
+// (bounded) before the next step so Spotify is paused before the game audio fades back in.
+async function applyActions(actions) {
   for (const a of actions) {
     if (a.type === 'fadeOut') ramp(0, settings.fadeMs);
     else if (a.type === 'fadeIn') ramp(1, settings.fadeMs);
-    else if (a.type === 'spotify') spotify.push(a);
+    else if (a.type === 'spotify') await withTimeout(toSw({ type: 'actions', actions: [a] }), 800);
     else if (a.type === 'badge') toSw({ type: 'badge', text: a.text });
   }
-  if (spotify.length) toSw({ type: 'actions', actions: spotify });
 }
 
 function grabFrame() {
@@ -53,7 +55,16 @@ function tick(pcm) {
   toSw({ type: 'sample', record, hasAudio, hasVideo, components: learner.learned ? learner.components() : [] });
 }
 
-async function start({ streamId }) {
+async function start(msg) {
+  try { await startInner(msg); }
+  catch (e) {
+    console.error('start failed', e);
+    await stop(false);
+    toSw({ type: 'status', armed: false, error: e.message || String(e) });
+  }
+}
+
+async function startInner({ streamId }) {
   await stop(false);
   stream = await navigator.mediaDevices.getUserMedia({
     audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } },
@@ -112,7 +123,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.target !== 'offscreen') return;
   if (msg.type === 'start') start(msg);
   else if (msg.type === 'stop') stop(false);
-  else if (msg.type === 'settings') settings = mergeSettings(msg.settings);
+  else if (msg.type === 'settings') { settings = mergeSettings(msg.settings); if (pipeline) pipeline.setShadow(settings.shadow); }
   else if (msg.type === 'override' && pipeline) pipeline.override(msg.kind);
   else if (msg.type === 'label' && log) log.event('label', { label: msg.label });
   else if (msg.type === 'exportLog') { sendResponse(log ? log.toJSON() : null); return true; }

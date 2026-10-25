@@ -134,3 +134,16 @@ test('banks use the embedding when the classifier provides one, else the class s
   noEmb.p.onFrame(frame(255, 255)); noEmb.p.tick(0, pcm(0.1));
   assert.equal(noEmb.parts.gameBank.items[0].length, 521);
 });
+
+test('setShadow(false) while running switches the controller to real actions and logs the change', () => {
+  const actions = [];
+  const parts = {
+    learner: fakeLearner(), detector: new Detector(), controller: new Controller({ shadow: true }),
+    gameBank: new Bank(), adBank: new Bank(), log: new SampleLog(),
+    classify: () => ({ scores: GAME_VEC, speech: 0.8, music: 0.1, silence: 0 }), onActions: (a) => actions.push(...a),
+  };
+  const p = createPipeline(parts);
+  p.setShadow(false);
+  assert.equal(parts.controller.shadow, false);
+  assert.ok(parts.log.toJSON().events.some(e => e.name === 'shadow' && e.data.shadow === false));
+});

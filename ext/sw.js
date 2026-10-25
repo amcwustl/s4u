@@ -14,10 +14,13 @@ const host = createHostClient({
   connect: () => chrome.runtime.connectNative(HOST_NAME),
   onState: () => updateTitle(),
 });
+let inflight = Promise.resolve();
 async function hostSend(msg) {
-  try { return await host.send(msg); }
-  catch (e) { console.warn('host', msg.cmd, e.message); return { ok: false, error: e.message }; }
+  const p = host.send(msg).catch((e) => { console.warn('host', msg.cmd, e.message); return { ok: false, error: e.message }; });
+  inflight = inflight.then(() => p, () => p);
+  return p;
 }
+let lastError = null;
 
 async function loadSettings() {
   const stored = await chrome.storage.sync.get(null);
@@ -51,7 +54,7 @@ function updateTitle() {
   const spotify = host.state.connected ? 'Spotify ✓' : 'Spotify ✗';
   const title = lastStatus?.armed
     ? `Commercial Switcher: ${lastBadge || 'armed'}${settings.shadow ? ' [SHADOW]' : ''} — ${spotify} — audio ${lastStatus.hasAudio ? 'yes' : 'NO'}, video ${lastStatus.hasVideo ? 'yes' : 'NO'}`
-    : 'Commercial Switcher: off';
+    : lastError ? `Commercial Switcher: off — last error: ${lastError}` : 'Commercial Switcher: off';
   chrome.action.setTitle({ title });
 }
 const BADGE_CODES = { 'Learning…': 'ON', Game: 'ARM', Muted: 'MUTE', Paused: 'II', Off: '', 'SHADOW: would mute': 'SHDW', 'SHADOW: would unmute': 'ARM' };
@@ -66,6 +69,7 @@ async function setBadge(text) {
 async function disarm() {
   await toOffscreen({ type: 'stop' });   // offscreen runs controller.end() → may send spotify game
   await new Promise(r => setTimeout(r, 150));
+  await inflight;                        // let that Spotify pause complete (bounded by the 2 s reply timeout)
   await closeOffscreen();
   await setArmedTabId(null);
   host.stop();
@@ -74,6 +78,7 @@ async function disarm() {
 }
 
 async function arm(tab) {
+  lastError = null;
   await loadSettings();
   const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
   await ensureOffscreen();
@@ -107,13 +112,17 @@ async function applySpotify(actions) {
   }
 }
 
-chrome.runtime.onMessage.addListener((msg, sender) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.target === 'sw') {
     if (msg.type === 'status') {
-      if (msg.armed === false) { disarm(); return; }
+      if (msg.armed === false) {
+        if (msg.error) { lastError = msg.error; chrome.action.setBadgeText({ text: 'ERR' }); }
+        disarm().then(() => { if (msg.error) chrome.action.setBadgeText({ text: 'ERR' }); });
+        return;
+      }
       lastStatus = msg; updateTitle();
     } else if (msg.type === 'badge') setBadge(msg.text);
-    else if (msg.type === 'actions') applySpotify(msg.actions);
+    else if (msg.type === 'actions') { applySpotify(msg.actions).then(() => sendResponse({ ok: true })); return true; }
     else if (msg.type === 'sample') for (const p of debugPorts) p.postMessage(msg);
     return;
   }
@@ -140,4 +149,14 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === 'debug') chrome.tabs.create({ url: chrome.runtime.getURL('debug.html') });
   if (info.menuItemId === 'options') chrome.runtime.openOptionsPage();
+});
+
+// MV3 service workers restart at will. If a tab is still armed (offscreen document keeps running),
+// restore settings and the Spotify connection so breaks keep switching.
+getArmedTabId().then(async (id) => {
+  if (id === null) return;
+  await loadSettings();
+  host.start();
+  lastStatus = { armed: true, hasAudio: true, hasVideo: true };
+  updateTitle();
 });

@@ -142,14 +142,21 @@ test('custom goneSec shifts the clean-break transition', () => {
   assert.equal(DEFAULTS.goneSec, 3);
 });
 
-test('streaky ad audio is caught by a majority vote over the last 10 s', () => {
+test('mildly ad-like audio (never ≥ 0.75) is caught by a majority vote, but only once the scoreboard has been gone 10 s', () => {
   const d = new Detector();
   run(d, seq(60, {}));
-  const probs = [0.9, 0.6, 0.4, 0.9, 0.6, 0.9, 0.6, 0.4, 0.9, 0.6, 0.6, 0.4, 0.9];
-  const vs = run(d, probs.map((adProb, i) => ({ ...AD, adProb, t: 60 + i })));
+  const vs = run(d, seq(20, { ...AD, adProb: 0.6 }, 60));
   const t = firstT(vs, 'COMMERCIAL');
   assert.equal(vs.find(v => v.t === t).reason, 'audio-vote');
-  assert.equal(t, 70); // votes start at t=63 (goneSec > 3); the 7th hit ≥ 0.5 lands at t=70
+  assert.equal(t, 75); // votes start at t=69 (goneSec ≥ 10); the 7th hit lands at t=75
+  assert.equal(DEFAULTS.adVoteGoneSec, 10);
+});
+
+test('nine seconds of mildly ad-like audio with the scoreboard gone never votes', () => {
+  const d = new Detector();
+  run(d, seq(60, {}));
+  const vs = run(d, seq(9, { ...AD, adProb: 0.6 }, 60));
+  assert.ok(vs.every(v => v.state === 'GAME'));
 });
 
 test('a short produced package (8 s of mildly ad-like audio) never mutes', () => {

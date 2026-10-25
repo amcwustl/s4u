@@ -5,7 +5,7 @@
 // Verdict: { state, reason, goneSec }
 export const DEFAULTS = {
   goneSec: 3, adProb: 0.75, adProbSec: 2, blackCutWindowSec: 20,
-  adVoteProb: 0.5, adVoteWindow: 10, adVoteHits: 7,
+  adVoteProb: 0.5, adVoteWindow: 10, adVoteHits: 7, adVoteGoneSec: 10,
   holdVis: 0.8, dipVis: 0.4, dipHoldSec: 3, ambientWindowSec: 30, ambientMax: 0.2,
   recoverVisFast: 0.85, recoverVisSlow: 0.4, recoverSlowFrames: 3,
   recoverSim: 0.70, recoverSimHits: 5, recoverSimWindow: 6,
@@ -74,8 +74,12 @@ export class Detector {
         if (ambient && this.goneSec <= o.ambientWindowSec) { /* crowd/whistles: neither game nor ad */ }
         else {
           if (adLike) this.adStreak++; else this.adStreak = 0;
-          this.adVotes.push(s.adProb >= o.adVoteProb ? 1 : 0);
-          if (this.adVotes.length > o.adVoteWindow) this.adVotes.shift();
+          // The softer vote path only opens once the scoreboard has been gone a while: short
+          // produced packages with music must never mute (anti-goal #1).
+          if (this.goneSec >= o.adVoteGoneSec) {
+            this.adVotes.push(s.adProb >= o.adVoteProb ? 1 : 0);
+            if (this.adVotes.length > o.adVoteWindow) this.adVotes.shift();
+          }
         }
         if (this.adStreak >= o.adProbSec) { this._enter('COMMERCIAL', 'audio'); return this._verdict(); }
         const hits = this.adVotes.reduce((a, b) => a + b, 0);

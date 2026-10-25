@@ -103,5 +103,11 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
     return actions;
   }
 
-  return { onFrame, tick, override, end, toGray };
+  /** Flip shadow mode while running; the learned scoreboard and sound banks are kept. */
+  function setShadow(shadow) {
+    controller.shadow = !!shadow;
+    log.event('shadow', { shadow: controller.shadow });
+  }
+
+  return { onFrame, tick, override, end, setShadow, toGray };
 }
