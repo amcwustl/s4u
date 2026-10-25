@@ -26,3 +26,8 @@ test('manifest uses a module service worker and allows wasm', () => {
   assert.equal(manifest.background.type, 'module');
   assert.ok(manifest.content_security_policy.extension_pages.includes("'wasm-unsafe-eval'"));
 });
+
+test('manifest key is an RSA public key (SubjectPublicKeyInfo), never a private key', () => {
+  // DER SubjectPublicKeyInfo for RSA-2048 begins with this base64 prefix; PKCS8 private keys begin with "MIIEv".
+  assert.ok(manifest.key.startsWith('MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A'), 'key is not a public key');
+});

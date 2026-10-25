@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "open $*" >> "$FAKE_LOG"
+# Simulate Spotify coming up: later isRunning checks answer true.
+echo true > "$FAKE_RUNNING_FILE"

@@ -3,19 +3,52 @@
   "name": "Commercial Switcher",
   "version": "0.1.0",
   "description": "Mutes commercials in a live sports tab and plays Spotify instead.",
-  "key": "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQD2T8O7/AuI/sfXrOcB0SaYzW+blNFZrfgGPfQoxj+rDcxmgVZ3bUE7NpUWECiLBfGyqhYbSjaGTGj+NbImTxfI1ZXd5Da2vbobQ38Y7kLcojS1N/R9CffQmzemAzvcxJwD7ytbPnHv24v2FGGgHfiBkHV7sEggrlPRP7KVC6KUjHR+8GuaV+gUu3gFOJz3HfIbdqEXi1pSGQz01KUovbsfzTdbalQyuuSyh45PK9RKDcyoxbXkm57PIyXCcUGJgUMgtndL7KCa63N0Qz3Xjoms9qTef4e14k6HoLmwmmh6FMAjqBmJmhAZ9jiqkEdLnkIiOF4DMixxNIyglDj78fIrAgMBAAECggEAD5zjvn/jUqDlFaiPO2AWDxEqlhU7UJtvQXoI3Cgg3gdcYaeozZ4pHdyVBlZ/iLxs4yiBM+P4Nnq+caqsAF36wc9kFgdtaReipdrD7NZ2z4R1TIK0+9NiGCDWngPOIMLSVDTYrd/J72xztTqlK4tAIXpWMBZu+VSuLxvXW+I7wShRiPrvjnr/37KFhuk6zpSoPDfEaEzXwk2WQL0XbRSx6Du8vk63IgGSjOJhEBU53fX8nqm7wRraubu0xBdHgS/nRBL5wMwCsF5JUgConDN2TmGtpcJjsNaZOaq9hiMRMPf+R65YZ2Xrh3UsDPGKVfbiNlkjFoHDcoSuhyZkO7Z7nQKBgQD8vJ4VRSqh9alel1uhbpzqfrPUrK4fgVV5VCryln4YeHq8BxEBuBjMeA2SoRcq2uaC/j6/BtPCbRjrQOwUhUXJBo8Ai/G2ZSRbmGmi/PNKnMnwRLm6F7FZNEMqXb1wKujwlGyVHsCCa30ra2POHAmdj94rQ9SZKmaA3ZJn7JPTbQKBgQD5fejX7LrAyKiVbs11zwPurBhYvk8ziOX4XTv8HsbSDs1P1HBSfGW6xudEkGP55P0+jdwyVYLZ+WUVjcU/4tZaes7jhYXhPagtPC5nb8Z3KWaUZ9ArZZ9Qc9VokbcFBbaTHYQ/+m0T3fFCxWhbBStQp7bylk/d2IosbuzHaMhE9wKBgQCdObGWRdsJukvNHpfQS4Gul3fD/FCuJMVJn0TAeUKkcn7X7gV0blRvDthSuYgyDs+L+iKKr/KYZ0ozP8Yd1fLd5gicLHMIJs+Bc8VzsaygY/10TSzFSev4NHz8JCivWOJkl9Ecy26zM69AjaQfGm4Y6OErRR1C04/E5xInOJOV2QKBgQClDClsJpxJCrWT3bAoHmIQk2Kr2oIUqpzQGAWlvUp0Dfy+sd/4gXje/dRipE6vM1BhAIHJ/o3I21aG0rnJkKuTQaj6FQvDPQGzoxtjrCsUC5xj0uWAwAKLu4VTXwo/VU85tY4WsPlV6j4/mM53YE0OV1UM2GlPbn/B80PKi0PpcwKBgHjQr4y17BvCf4v8T9hM2wOKL6jScpA7rF5SwwvT7DFg2oWvyacIH1h0aXTIb1irBicXOKw82j7CkL8KOnUsaTIURgsruUrvqStrNSxoZozU/3gy5loSXk2IGjreean5rFI1wNSFE9MY+yxUK9UuvXVqDKPz663tvNFvtc6dm6is",
-  "permissions": ["tabCapture", "offscreen", "nativeMessaging", "storage", "scripting", "activeTab", "contextMenus"],
-  "host_permissions": ["<all_urls>"],
-  "background": { "service_worker": "sw.js", "type": "module" },
-  "action": { "default_title": "Commercial Switcher: off" },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA9k/Du/wLiP7H16znAdEmmM1vm5TRWa34Bj30KMY/qw3MZoFWd21BOzaVFhAoiwXxsqoWG0o2hkxo/jWyJk8XyNWV3eQ2tr26G0N/GO5C3KI0tTf0fQn30Js3pgM73MScA+8rWz5x79uL9hRhoB34gZB1e7BIIK5T0T+ylQuilIx0fvBrmlfoFLt4BTic9x3yG3ahF4taUhkM9NSlKL27H803W2pUMrrksoeOTyvUSg3MqMW15JuezyMlwnFBiYFDILZ3S+ygmutzdEM9146JrPak3n+HteJOh6C5sJpoehTAI6gZiZoQGfY4qpBHS55CIjheAzIscTSMoJQ4+/HyKwIDAQAB",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "nativeMessaging",
+    "storage",
+    "scripting",
+    "activeTab",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "sw.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Commercial Switcher: off"
+  },
   "commands": {
-    "toggle-mute": { "suggested_key": { "default": "Alt+Shift+M" }, "description": "Mute/unmute now (override)" },
-    "toggle-pause": { "suggested_key": { "default": "Alt+Shift+P" }, "description": "Pause/resume automatic switching" }
+    "toggle-mute": {
+      "suggested_key": {
+        "default": "Alt+Shift+M"
+      },
+      "description": "Mute/unmute now (override)"
+    },
+    "toggle-pause": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Pause/resume automatic switching"
+    }
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
   "web_accessible_resources": [
-    { "resources": ["vendor/*", "model/*"], "matches": ["<all_urls>"] }
+    {
+      "resources": [
+        "vendor/*",
+        "model/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
   ]
 }

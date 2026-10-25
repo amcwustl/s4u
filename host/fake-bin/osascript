@@ -1,0 +1,10 @@
+#!/bin/bash
+# Fake osascript for tests: logs the script and answers a few known queries.
+script="$*"
+echo "$script" >> "$FAKE_LOG"
+case "$script" in
+  *"player state"*) echo "paused" ;;
+  *"name of current track"*) echo "Fake Track" ;;
+  *'processes) contains "Spotify"'*) if [ -n "${FAKE_RUNNING_FILE:-}" ] && [ -f "$FAKE_RUNNING_FILE" ]; then cat "$FAKE_RUNNING_FILE"; else echo "${FAKE_RUNNING:-true}"; fi ;;
+  *) echo "" ;;
+esac
