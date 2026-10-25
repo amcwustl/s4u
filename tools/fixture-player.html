@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Fixture player</title>
+<style>
+  body { font: 13px/1.4 -apple-system, system-ui, sans-serif; background: #1b1b1b; color: #eee; margin: 0; padding: 16px; }
+  canvas#chart { width: 100%; max-width: 1200px; height: 260px; background: #111; border-radius: 6px; display: block; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin-top: 12px; }
+  .thumb { position: relative; width: 320px; height: 180px; background: #000; } .thumb canvas { width: 320px; height: 180px; }
+  .thumb .c { position: absolute; border: 2px solid #fdd835; box-sizing: border-box; } .thumb .c.scoreboard { border-color: #43a047; }
+  pre { background: #111; padding: 8px; border-radius: 6px; max-width: 800px; white-space: pre-wrap; }
+  input, button { font: inherit; } button { padding: 6px 12px; border-radius: 6px; border: 0; background: #333; color: #eee; cursor: pointer; }
+</style>
+<h3>Fixture player — runs the detection pipeline over a recording</h3>
+<p>Serve from the repo root (<code>python3 -m http.server 8765</code>). Query params: <code>?frames=../fixtures/frames-320x180.gray&pcm=../fixtures/audio-16k.f32&labels=318:ad,437:game</code> (raw files from tools/prep-fixture.sh; works headless) or <code>?video=…webm&audio=…wav</code>, or pick files below.</p>
+<div>video <input type="file" id="vfile" accept="video/*"> audio <input type="file" id="afile" accept="audio/*,.wav"> <button id="run">Run</button> <button id="export">Export log</button></div>
+<canvas id="chart" width="1200" height="260"></canvas>
+<div class="row">
+  <div class="thumb" id="thumb"><canvas id="frame" width="320" height="180"></canvas></div>
+  <pre id="out">idle</pre>
+</div>
+<video id="v" muted playsinline style="display:none"></video>
+<script type="module" src="fixture-player.js"></script>

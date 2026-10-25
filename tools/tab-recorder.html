@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Tab Recorder (throwaway test tool)</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#222}
+  button{font-size:16px;padding:10px 18px;margin-right:8px}
+  video{width:100%;background:#000;margin-top:16px;border-radius:6px}
+  #status{margin-top:12px;font-size:15px;white-space:pre-line}
+  .warn{color:#b00020;font-weight:600}
+  .ok{color:#1b7f3b;font-weight:600}
+</style>
+<h2>Tab Recorder</h2>
+<ol>
+  <li>Click <b>Start</b>. In the picker choose the <b>Chrome Tab</b> section, pick the game tab, and make sure <b>"Also share tab audio"</b> is checked.</li>
+  <li>Leave this tab open. Watch the game. Record through at least one full commercial break (10 to 15 minutes is ideal).</li>
+  <li>Click <b>Stop</b>. The .webm file downloads automatically.</li>
+</ol>
+<button id="start">Start</button>
+<button id="stop" disabled>Stop</button>
+<video id="preview" muted autoplay playsinline></video>
+<div id="status">Idle.</div>
+<script>
+const $=id=>document.getElementById(id);
+let stream, rec, chunks=[], t0, timer, lumTimer;
+const canvas=document.createElement('canvas'), ctx=canvas.getContext('2d',{willReadFrequently:true});
+function fmt(ms){const s=Math.floor(ms/1000);return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
+function luminance(){
+  const v=$('preview'); if(!v.videoWidth) return null;
+  canvas.width=96; canvas.height=54; ctx.drawImage(v,0,0,96,54);
+  const d=ctx.getImageData(0,0,96,54).data; let sum=0;
+  for(let i=0;i<d.length;i+=4) sum+=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+  return sum/(d.length/4);
+}
+$('start').onclick=async()=>{
+  try{
+    stream=await navigator.mediaDevices.getDisplayMedia({
+      video:{frameRate:15}, audio:true, selfBrowserSurface:'exclude', systemAudio:'exclude'
+    });
+  }catch(e){ $('status').textContent='Cancelled or blocked: '+e.message; return; }
+  const hasAudio=stream.getAudioTracks().length>0;
+  $('preview').srcObject=stream;
+  chunks=[];
+  rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp8,opus',videoBitsPerSecond:1_500_000});
+  rec.ondataavailable=e=>{if(e.data.size) chunks.push(e.data)};
+  rec.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`tab-${new Date().toISOString().replace(/[:.]/g,'-')}.webm`;
+    a.click();
+    $('status').innerHTML=`<span class="ok">Saved ${(blob.size/1e6).toFixed(1)} MB to your Downloads folder.</span>`;
+  };
+  rec.start(1000);
+  t0=Date.now();
+  $('start').disabled=true; $('stop').disabled=false;
+  stream.getVideoTracks()[0].onended=()=>$('stop').click();
+  lumTimer=setInterval(()=>{
+    const L=luminance(); const el=Date.now()-t0;
+    let msg=`Recording ${fmt(el)}  |  audio track: ${hasAudio?'yes':'NO - restart and check "Also share tab audio"'}`;
+    if(L!==null) msg+= L<8 ? `\nVideo brightness ${L.toFixed(1)}: frames look BLACK. If the preview is black while the game is playing, this stream is DRM-protected.`
+                          : `\nVideo brightness ${L.toFixed(1)}: video is coming through.`;
+    $('status').innerHTML=msg.replace(/BLACK[^\n]*/,m=>`<span class="warn">${m}</span>`).replace(/video is coming through/,m=>`<span class="ok">${m}</span>`);
+  },1000);
+};
+$('stop').onclick=()=>{
+  if(rec&&rec.state!=='inactive') rec.stop();
+  clearInterval(lumTimer);
+  stream&&stream.getTracks().forEach(t=>t.stop());
+  $('start').disabled=false; $('stop').disabled=true;
+};
+</script>

@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Commercial Switcher — settings</title>
+<style>
+  body { font: 14px/1.5 -apple-system, system-ui, sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; color: #222; }
+  label { display: block; margin: 14px 0 4px; font-weight: 600; } input[type=text], input[type=number], textarea { width: 100%; font: inherit; padding: 6px; box-sizing: border-box; }
+  .hint { color: #666; font-size: 13px; } textarea { font-family: ui-monospace, monospace; height: 120px; } #saved { color: #1b7f3b; margin-left: 8px; }
+</style>
+<h2>Commercial Switcher</h2>
+<label><input type="checkbox" id="shadow"> Shadow mode</label>
+<div class="hint">Detect and log only. Nothing is muted and Spotify is not touched. Turn off once the debug chart looks right.</div>
+<label>During commercials, Spotify should</label>
+<select id="spotifyMode"><option value="resume">Resume whatever it was playing</option><option value="uri">Play a specific playlist / album</option></select>
+<label for="spotifyUri">Spotify URI</label>
+<input type="text" id="spotifyUri" placeholder="spotify:playlist:37i9dQZF1DXcBWIGoYBM5M">
+<div class="hint">In Spotify: … menu → Share → Copy Spotify URI (hold Option to see it). Used only with the playlist option.</div>
+<label><input type="checkbox" id="launchSpotify"> Launch Spotify in the background if it isn't running</label>
+<label for="fadeMs">Fade duration (ms)</label>
+<input type="number" id="fadeMs" min="0" max="3000" step="50">
+<label for="detector">Detector threshold overrides (JSON)</label>
+<textarea id="detector" placeholder='{"goneSec": 3, "adProb": 0.75}'></textarea>
+<div class="hint">Keys must exist in the detector defaults. Leave empty for defaults.</div>
+<p><button id="save">Save</button><span id="saved"></span></p>
+<script type="module" src="options.js"></script>

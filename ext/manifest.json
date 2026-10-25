@@ -1,0 +1,73 @@
+{
+  "manifest_version": 3,
+  "name": "Commercial Switcher",
+  "version": "0.1.0",
+  "description": "Mutes commercials in a live sports tab and plays Spotify instead.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA9k/Du/wLiP7H16znAdEmmM1vm5TRWa34Bj30KMY/qw3MZoFWd21BOzaVFhAoiwXxsqoWG0o2hkxo/jWyJk8XyNWV3eQ2tr26G0N/GO5C3KI0tTf0fQn30Js3pgM73MScA+8rWz5x79uL9hRhoB34gZB1e7BIIK5T0T+ylQuilIx0fvBrmlfoFLt4BTic9x3yG3ahF4taUhkM9NSlKL27H803W2pUMrrksoeOTyvUSg3MqMW15JuezyMlwnFBiYFDILZ3S+ygmutzdEM9146JrPak3n+HteJOh6C5sJpoehTAI6gZiZoQGfY4qpBHS55CIjheAzIscTSMoJQ4+/HyKwIDAQAB",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "nativeMessaging",
+    "storage",
+    "scripting",
+    "activeTab",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "sw.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Commercial Switcher: off"
+  },
+  "commands": {
+    "toggle-mute": {
+      "suggested_key": {
+        "default": "Alt+Shift+M"
+      },
+      "description": "Mute/unmute now (override)"
+    },
+    "toggle-pause": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Pause/resume automatic switching"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vendor/*",
+        "model/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle",
+      "js": [
+        "badge.js"
+      ],
+      "css": [
+        "badge.css"
+      ]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}
