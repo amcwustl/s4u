@@ -11,7 +11,7 @@
 </style>
 <h2>Tab Recorder</h2>
 <ol>
-  <li>Click <b>Start</b>. In the picker choose the <b>Chrome Tab</b> section, pick the seasons4u tab, and make sure <b>"Also share tab audio"</b> is checked.</li>
+  <li>Click <b>Start</b>. In the picker choose the <b>Chrome Tab</b> section, pick the game tab, and make sure <b>"Also share tab audio"</b> is checked.</li>
   <li>Leave this tab open. Watch the game. Record through at least one full commercial break (10 to 15 minutes is ideal).</li>
   <li>Click <b>Stop</b>. The .webm file downloads automatically.</li>
 </ol>
@@ -46,7 +46,7 @@ $('start').onclick=async()=>{
     const blob=new Blob(chunks,{type:'video/webm'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
-    a.download=`seasons4u-${new Date().toISOString().replace(/[:.]/g,'-')}.webm`;
+    a.download=`tab-${new Date().toISOString().replace(/[:.]/g,'-')}.webm`;
     a.click();
     $('status').innerHTML=`<span class="ok">Saved ${(blob.size/1e6).toFixed(1)} MB to your Downloads folder.</span>`;
   };

@@ -81,7 +81,7 @@ async function arm(tab) {
   await toOffscreen({ type: 'settings', settings });
   await toOffscreen({ type: 'start', streamId, tabId: tab.id });
   host.start();
-  hostSend({ cmd: 'status' });
+  hostSend({ cmd: 'game' }); // make sure Spotify is paused at kickoff; it resumes at the first break
   lastStatus = { armed: true, hasAudio: false, hasVideo: false };
   await setBadge('Learning…');
 }
