@@ -159,11 +159,13 @@ distribution (speech / music / crowd / silence) and a 1024-d embedding.
 
 - While the scoreboard is visible, embeddings are added to a **game bank**
   (what this broadcast sounds like).
-- Once a long confirmed break has been heard (scoreboard gone 40 s+ with music),
-  its embeddings are added to an **ad bank**.
+- Once a break has been confirmed for 20 s, its embeddings (seconds carrying speech
+  or music) are added to an **ad bank**.
 - **Game similarity** = cosine similarity to the game bank's centroid.
-- **Ad probability** = once both banks exist, the mean of (a) nearest-bank
-  comparison and (b) 1 − game similarity. Before an ad bank exists, (b) alone.
+- **Ad probability** = 1 − game similarity. Once the ad bank has 20+ members it can
+  only raise this: max with (game z − ad z) / 2, i.e. how much further the second
+  sits outside the game cluster than outside the ad cluster. (A raw nearest-cosine
+  comparison was tried first; it sat at ≈ 0.5 for everything and diluted the score.)
 
 **Black cut.** A frame with mean luminance near zero coinciding with near-silent
 audio is a black cut.
@@ -173,7 +175,10 @@ transition rules (initial defaults; all tunable from the debug panel):
 
 Enter COMMERCIAL when either:
 - scoreboard gone ≥ 3 s **and** ad probability ≥ 0.75 for ≥ 2 s; or
-- a black cut occurs within 20 s after the scoreboard left.
+- a black cut occurs while the scoreboard is gone, however long it has been gone
+  (play never cuts to black with silence; the first black cut of a break is often
+  the ad-to-ad cut 30–45 s in). A cut inside the last second the scoreboard was
+  seen is carried one second, since that second's other frame masks it.
 
 Stay in GAME (do not enter COMMERCIAL) when:
 - any learned graphic component (scoreboard or logo) is ≥ 80% visible; or
@@ -184,7 +189,8 @@ Stay in GAME (do not enter COMMERCIAL) when:
 
 Leave COMMERCIAL (return to GAME) when either:
 - scoreboard ≥ 85% visible in one frame, or ≥ 40% in 3 consecutive frames; or
-- game similarity ≥ 0.70 in 5 of the last 6 seconds.
+- game similarity ≥ 0.70 in 5 of the last 6 seconds that carried speech or music
+  (near-silent seconds score game-like against the bank and are ignored).
 
 Never leave COMMERCIAL on the network logo alone: ads reuse network graphics.
 

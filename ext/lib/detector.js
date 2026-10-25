@@ -4,8 +4,8 @@
 //   gameSim/adProb null        → no audio profile yet (cold start, or no audio)
 // Verdict: { state, reason, goneSec }
 export const DEFAULTS = {
-  goneSec: 3, adProb: 0.75, adProbSec: 2, blackCutWindowSec: 20,
-  adVoteProb: 0.5, adVoteWindow: 10, adVoteHits: 7, adVoteGoneSec: 10,
+  goneSec: 3, adProb: 0.75, adProbSec: 2,
+  adVoteProb: 0.5, adVoteWindow: 10, adVoteHits: 6, adVoteGoneSec: 10,
   holdVis: 0.8, dipVis: 0.4, dipHoldSec: 3, ambientWindowSec: 30, ambientMax: 0.2,
   recoverVisFast: 0.85, recoverVisSlow: 0.4, recoverSlowFrames: 3,
   recoverSim: 0.70, recoverSimHits: 5, recoverSimWindow: 6,
@@ -26,6 +26,7 @@ export class Detector {
     this.recoverStreak = 0;
     this.simWindow = [];
     this.commercialSec = 0;
+    this.lastCut = false;
   }
 
   get state() { return this._state; }
@@ -33,7 +34,7 @@ export class Detector {
   _enter(state, reason) {
     this._state = state; this.reason = reason;
     this.adStreak = 0; this.adVotes = []; this.audioOnlyStreak = 0; this.audioOnlyVotes = []; this.dipStreak = 0; this.recoverStreak = 0;
-    this.simWindow = []; this.commercialSec = 0;
+    this.simWindow = []; this.commercialSec = 0; this.lastCut = false;
     if (state === 'GAME') this.goneSec = 0;
   }
 
@@ -41,6 +42,8 @@ export class Detector {
     const o = this.o;
     const vis = s.scoreboardVis, logo = s.logoVis;
     const hasVision = vis !== null && vis !== undefined;
+    // Crowd, whistles, a quiet ad: neither game nor ad evidence.
+    const ambient = (s.speech ?? 1) < o.ambientMax && (s.music ?? 1) < o.ambientMax;
 
     if (this._state === 'GAME') {
       // --- hold rules keep the gone timer at zero
@@ -55,7 +58,6 @@ export class Detector {
 
       const hasAd = s.adProb !== null && s.adProb !== undefined;
       const adLike = hasAd && s.adProb >= o.adProb;
-      const ambient = (s.speech ?? 1) < o.ambientMax && (s.music ?? 1) < o.ambientMax;
 
       if (!hasVision) {
         // audio-only mode (no video / scoreboard never learned)
@@ -70,7 +72,12 @@ export class Detector {
         return this._verdict();
       }
 
-      if (s.blackCut && this.goneSec > 0 && this.goneSec <= o.blackCutWindowSec) {
+      // Play never cuts to black with silence, so any black cut once the scoreboard is gone is a break,
+      // however long it has been gone. A cut mid-second is masked by that second's other frame still
+      // showing the scoreboard (vis is the max over frames), so it is carried to the next second.
+      const cut = s.blackCut || this.lastCut;
+      this.lastCut = !!s.blackCut;
+      if (cut && this.goneSec > 0) {
         this._enter('COMMERCIAL', 'black-cut'); return this._verdict();
       }
       if (s.adProb === null || s.adProb === undefined) {
@@ -101,7 +108,8 @@ export class Detector {
     if (hasVision && vis >= o.recoverVisFast) { this._enter('GAME', 'scoreboard'); return this._verdict(); }
     if (hasVision && vis >= o.recoverVisSlow) this.recoverStreak++; else this.recoverStreak = 0;
     if (this.recoverStreak >= o.recoverSlowFrames) { this._enter('GAME', 'scoreboard'); return this._verdict(); }
-    if (s.gameSim !== null && s.gameSim !== undefined) {
+    // Near-silent ad seconds score as "game-like" against the bank; only speech or music can vouch for the game.
+    if (s.gameSim !== null && s.gameSim !== undefined && !ambient) {
       this.simWindow.push(s.gameSim >= o.recoverSim ? 1 : 0);
       if (this.simWindow.length > o.recoverSimWindow) this.simWindow.shift();
       const hits = this.simWindow.reduce((a, b) => a + b, 0);

@@ -37,12 +37,40 @@ test('black cut shortly after the scoreboard leaves mutes immediately', () => {
   assert.equal(v.reason, 'black-cut');
 });
 
-test('black cut long after the scoreboard left does nothing', () => {
+test('black cut long after the scoreboard left still mutes: play never cuts to black', () => {
   const d = new Detector();
   run(d, seq(60, {}));
-  run(d, seq(30, { scoreboardVis: 0, logoVis: 0, gameSim: 0.85, adProb: 0.1 }, 60));
-  const v = d.step({ scoreboardVis: 0, logoVis: 0, gameSim: 0.85, adProb: 0.1, speech: 0.8, music: 0.1, blackCut: true, t: 90 });
+  run(d, seq(70, { scoreboardVis: 0, logoVis: 0, gameSim: 0.85, adProb: 0.1 }, 60));
+  const v = d.step({ scoreboardVis: 0, logoVis: 0, gameSim: 0.85, adProb: 0.1, speech: 0.8, music: 0.1, blackCut: true, t: 130 });
+  assert.equal(v.state, 'COMMERCIAL');
+  assert.equal(v.reason, 'black-cut');
+});
+
+test('black cut while the scoreboard is still visible does nothing', () => {
+  const d = new Detector();
+  run(d, seq(60, {}));
+  const v = d.step({ ...GAME, blackCut: true, t: 60 });
   assert.equal(v.state, 'GAME');
+  assert.ok(run(d, seq(5, {}, 61)).every(x => x.state === 'GAME'));
+});
+
+test('a cut mid-second (scoreboard still in that second\'s other frame) mutes on the next second', () => {
+  const d = new Detector();
+  run(d, seq(60, {}));
+  assert.equal(d.step({ ...GAME, blackCut: true, t: 60 }).state, 'GAME');
+  const v = d.step({ ...AD, adProb: 0.1, blackCut: false, t: 61 });
+  assert.equal(v.state, 'COMMERCIAL');
+  assert.equal(v.reason, 'black-cut');
+});
+
+test('ad-to-ad black cut 37 s after the scoreboard left still mutes (live log 2026-10-25, t=220)', () => {
+  const d = new Detector();
+  run(d, seq(60, {}));
+  // A talking ad: adProb hovers below the vote line, so neither audio rule fires before the cut.
+  run(d, seq(36, { scoreboardVis: 0.3, logoVis: 0.3, gameSim: 0.5, adProb: 0.4, speech: 0.45, music: 0.02 }, 60));
+  const v = d.step({ scoreboardVis: 0.3, logoVis: 0.3, gameSim: 0.5, adProb: 0.4, speech: 0.45, music: 0.02, blackCut: true, t: 96 });
+  assert.equal(v.state, 'COMMERCIAL');
+  assert.equal(v.reason, 'black-cut');
 });
 
 test('visible logo holds GAME even with ad-like audio', () => {
@@ -67,6 +95,16 @@ test('sustained game audio leaves COMMERCIAL on the 5th sample', () => {
   const vs = run(d, seq(5, { ...AD, gameSim: 0.8 }, 70));
   assert.deepEqual(vs.map(v => v.state), ['COMMERCIAL', 'COMMERCIAL', 'COMMERCIAL', 'COMMERCIAL', 'GAME']);
   assert.equal(vs[4].reason, 'audio');
+});
+
+test('quiet ad seconds (ambient: no speech, no music) never count toward audio recovery', () => {
+  const d = new Detector();
+  run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
+  // Live log 2026-10-25 t=236-248: a near-silent ad scored gameSim 0.8-1.0 and un-muted the break.
+  const quiet = run(d, seq(12, { ...AD, gameSim: 0.95, speech: 0.05, music: 0.1 }, 70));
+  assert.ok(quiet.every(v => v.state === 'COMMERCIAL'));
+  const talk = run(d, seq(5, { ...AD, gameSim: 0.8, speech: 0.4, music: 0.02 }, 82));
+  assert.deepEqual(talk.map(v => v.state), ['COMMERCIAL', 'COMMERCIAL', 'COMMERCIAL', 'COMMERCIAL', 'GAME']);
 });
 
 test('talky ad with intermittent game-like audio stays COMMERCIAL', () => {
@@ -148,7 +186,7 @@ test('mildly ad-like audio (never ≥ 0.75) is caught by a majority vote, but on
   const vs = run(d, seq(20, { ...AD, adProb: 0.6 }, 60));
   const t = firstT(vs, 'COMMERCIAL');
   assert.equal(vs.find(v => v.t === t).reason, 'audio-vote');
-  assert.equal(t, 75); // votes start at t=69 (goneSec ≥ 10); the 7th hit lands at t=75
+  assert.equal(t, 74); // votes start at t=69 (goneSec ≥ 10); the 6th hit lands at t=74
   assert.equal(DEFAULTS.adVoteGoneSec, 10);
 });
 

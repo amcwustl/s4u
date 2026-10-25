@@ -14,6 +14,8 @@ export class SampleLog {
     this.events.push({ name, data, at: new Date().toISOString() });
   }
   toJSON() {
-    return { version: 1, started: this.started, samples: this.samples, events: this.events };
+    const samples = this.samples.map(s => s.embedding instanceof Float32Array
+      ? { ...s, embedding: Array.from(s.embedding, x => Math.round(x * 1000) / 1000) } : s);
+    return { version: 1, started: this.started, samples, events: this.events };
   }
 }
