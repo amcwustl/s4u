@@ -89,12 +89,70 @@ test('logo alone cannot leave COMMERCIAL', () => {
   assert.ok(vs.every(v => v.state === 'COMMERCIAL'));
 });
 
-test('sustained game audio leaves COMMERCIAL on the 5th sample', () => {
+test('sustained game audio leaves COMMERCIAL on the 10th speaking sample (10 of 12)', () => {
   const d = new Detector();
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
-  const vs = run(d, seq(5, { ...AD, gameSim: 0.8 }, 70));
-  assert.deepEqual(vs.map(v => v.state), ['COMMERCIAL', 'COMMERCIAL', 'COMMERCIAL', 'COMMERCIAL', 'GAME']);
-  assert.equal(vs[4].reason, 'audio');
+  const vs = run(d, seq(10, { ...AD, gameSim: 0.8 }, 70));
+  assert.ok(vs.slice(0, 9).every(v => v.state === 'COMMERCIAL'));
+  assert.equal(vs[9].state, 'GAME');
+  assert.equal(vs[9].reason, 'audio');
+  assert.equal(DEFAULTS.recoverSimHits, 10); assert.equal(DEFAULTS.recoverSimWindow, 12);
+});
+
+test('a 30 s talking ad that sounds like the game for 8 of 12 s stays COMMERCIAL', () => {
+  const d = new Detector();
+  run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
+  // live log 2026-10-25 18:11, t=267-276: .94 .70 .86 .89 1 1 .78 .41 .62 .70 ...
+  const sims = [0.94, 0.70, 0.86, 0.89, 1, 1, 0.78, 0.41, 0.62, 0.70, 0.34, 0.38, 0.08, 0.27, 0.09, 0.24];
+  const vs = run(d, sims.map((gameSim, i) => ({ ...AD, gameSim, speech: 0.3, music: 0.05, t: 70 + i })));
+  assert.ok(vs.every(v => v.state === 'COMMERCIAL'));
+});
+
+test('scoreboard hovering at 0.42 inside a break never recovers; 0.5 for 3 frames does', () => {
+  const d = new Detector();
+  run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
+  const hover = run(d, seq(6, { ...AD, scoreboardVis: 0.42 }, 70));
+  assert.ok(hover.every(v => v.state === 'COMMERCIAL'));
+  const half = run(d, seq(3, { ...AD, scoreboardVis: 0.5 }, 76));
+  assert.deepEqual(half.map(v => v.state), ['COMMERCIAL', 'COMMERCIAL', 'GAME']);
+  assert.equal(half[2].reason, 'scoreboard');
+  assert.equal(DEFAULTS.recoverVisSlow, 0.5);
+});
+
+test('flap guard: an audio recovery that re-mutes within 20 s locks audio recovery until the scoreboard returns', () => {
+  const d = new Detector();
+  run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
+  const talk = run(d, seq(10, { ...AD, gameSim: 0.9 }, 70));
+  assert.equal(talk[9].state, 'GAME'); assert.equal(talk[9].reason, 'audio');
+  const remute = run(d, seq(6, AD, 80));                       // music ad 6 s later: fooled once
+  assert.equal(remute.at(-1).state, 'COMMERCIAL');
+  const talkAgain = run(d, seq(30, { ...AD, gameSim: 0.95 }, 86));
+  assert.ok(talkAgain.every(v => v.state === 'COMMERCIAL'), 'audio alone may not unmute again this break');
+  const sb = d.step({ ...AD, scoreboardVis: 0.9, t: 116 });
+  assert.equal(sb.state, 'GAME'); assert.equal(sb.reason, 'scoreboard');
+  // guard clears with the scoreboard: the next break may recover on audio again
+  run(d, seq(10, AD, 117));
+  const later = run(d, seq(10, { ...AD, gameSim: 0.9 }, 127));
+  assert.equal(later[9].state, 'GAME'); assert.equal(later[9].reason, 'audio');
+  assert.equal(DEFAULTS.flapGuardSec, 20);
+});
+
+test('flap guard does not apply after a scoreboard recovery, nor in audio-only mode', () => {
+  const d = new Detector();
+  run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
+  assert.equal(d.step({ ...GAME, t: 70 }).reason, 'scoreboard');
+  run(d, seq(6, AD, 71));                                      // re-mute 6 s after a *scoreboard* recovery
+  const talk = run(d, seq(10, { ...AD, gameSim: 0.9 }, 77));
+  assert.equal(talk[9].state, 'GAME');
+  const a = new Detector();
+  const blind = { scoreboardVis: null, logoVis: null };
+  run(a, [...seq(60, blind), ...seq(15, { ...blind, gameSim: 0.1, adProb: 0.9 }, 60)]);
+  run(a, seq(10, { ...blind, gameSim: 0.9, adProb: 0.1 }, 75));
+  assert.equal(a.state, 'GAME');
+  run(a, seq(15, { ...blind, gameSim: 0.1, adProb: 0.9 }, 85));
+  assert.equal(a.state, 'COMMERCIAL');
+  run(a, seq(10, { ...blind, gameSim: 0.9, adProb: 0.1 }, 100));
+  assert.equal(a.state, 'GAME', 'without video, audio is the only way back');
 });
 
 test('quiet ad seconds (ambient: no speech, no music) never count toward audio recovery', () => {
@@ -103,8 +161,9 @@ test('quiet ad seconds (ambient: no speech, no music) never count toward audio r
   // Live log 2026-10-25 t=236-248: a near-silent ad scored gameSim 0.8-1.0 and un-muted the break.
   const quiet = run(d, seq(12, { ...AD, gameSim: 0.95, speech: 0.05, music: 0.1 }, 70));
   assert.ok(quiet.every(v => v.state === 'COMMERCIAL'));
-  const talk = run(d, seq(5, { ...AD, gameSim: 0.8, speech: 0.4, music: 0.02 }, 82));
-  assert.deepEqual(talk.map(v => v.state), ['COMMERCIAL', 'COMMERCIAL', 'COMMERCIAL', 'COMMERCIAL', 'GAME']);
+  const talk = run(d, seq(10, { ...AD, gameSim: 0.8, speech: 0.4, music: 0.02 }, 82));
+  assert.ok(talk.slice(0, 9).every(v => v.state === 'COMMERCIAL'));
+  assert.equal(talk[9].state, 'GAME');
 });
 
 test('talky ad with intermittent game-like audio stays COMMERCIAL', () => {
@@ -150,8 +209,8 @@ test('audio-only mode (no video): sustained ad probability mutes after 12 s, gam
   assert.ok(vs.slice(0, 9).every(v => v.state === 'GAME'));
   assert.equal(vs[9].state, 'COMMERCIAL');
   assert.equal(vs[9].reason, 'audio-only-vote');
-  const back = run(d, seq(5, { scoreboardVis: null, logoVis: null, gameSim: 0.8, adProb: 0.1 }, 75));
-  assert.equal(back[4].state, 'GAME');
+  const back = run(d, seq(10, { scoreboardVis: null, logoVis: null, gameSim: 0.8, adProb: 0.1 }, 75));
+  assert.equal(back[9].state, 'GAME');
 });
 
 test('no audio track: scoreboard-only with the 40 s rule, fast recovery at 0.85', () => {

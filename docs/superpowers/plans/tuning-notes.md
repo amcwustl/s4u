@@ -72,3 +72,28 @@ from flapping. The old nearest-cosine ad comparison sat at ≈ 0.5 for everythin
 once the bank existed — that is why run4's ad seconds were *less* ad-like after t = 360.
 
 New setting **Keep audio embeddings in the log** (≈ 4 KB/s) so the next live break can be studied offline.
+
+## 2026-10-25 — third live run (log `s4u-log-2026-10-25T18-11-08-104Z`, 1068 s, two breaks)
+
+Reported: un-mutes in the middle of commercials. Replay of the log:
+
+| t | rule | what the data shows |
+|---|---|---|
+| 276 → 289 | audio recovery 5/6 | talking ad scored gameSim 0.86–1.0 with speech 0.14–0.30 |
+| 322 → 324 | slow scoreboard 0.4 × 3 | scoreboard sat at 0.41–0.42 inside the break |
+| 942 → 948 | audio recovery 5/6 | talking ad, gameSim 0.92–1.0, speech ≈ 0.5 (announcer level) |
+| 383 → 392 | *false mute* in play | primary graphic absent 20 s during play, two adProb spikes ≥ 0.75 |
+
+Underneath: this session's learner chose a weak primary graphic. During play the "scoreboard" was
+≥ 0.8 on 8 % of seconds; the secondary "logo" was ≥ 0.9 on 65 % and never during a break. Open item:
+let every learned component vouch for recovery (contradicts the "never on the logo alone" rule; needs
+another game of data).
+
+Changes (owner's direction: be sure the game is back before un-muting):
+- `recoverSimHits/Window` 5/6 → **10/12**; `recoverVisSlow` 0.4 → **0.5**; new **flap guard** (`flapGuardSec` 20).
+
+| log | before | after |
+|---|---|---|
+| this run | 218C 276G 289C 322G 324C 360G 383C 392G 901C 942G 948C 1051G | 218C 360G 383C 398G 901C 1056G |
+| 17:31 run | 118C 123G 206C 309G | 118C 128G 206C (no return by log end; scoreboard never came back) |
+| run4 fixture | 319C 451G, 14 s billboard muted | 319C 457G, 20 s billboard muted |

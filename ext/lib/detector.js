@@ -7,8 +7,8 @@ export const DEFAULTS = {
   goneSec: 3, adProb: 0.75, adProbSec: 2,
   adVoteProb: 0.5, adVoteWindow: 10, adVoteHits: 6, adVoteGoneSec: 10,
   holdVis: 0.8, dipVis: 0.4, dipHoldSec: 3, ambientWindowSec: 30, ambientMax: 0.2,
-  recoverVisFast: 0.85, recoverVisSlow: 0.4, recoverSlowFrames: 3,
-  recoverSim: 0.70, recoverSimHits: 5, recoverSimWindow: 6,
+  recoverVisFast: 0.85, recoverVisSlow: 0.5, recoverSlowFrames: 3,
+  recoverSim: 0.70, recoverSimHits: 10, recoverSimWindow: 12, flapGuardSec: 20,
   coldGoneSec: 40, audioOnlyAdSec: 15, audioOnlyVoteWindow: 15, audioOnlyVoteHits: 10, maxCommercialSec: 240,
 };
 
@@ -27,11 +27,16 @@ export class Detector {
     this.simWindow = [];
     this.commercialSec = 0;
     this.lastCut = false;
+    this.lastAudioRecoverT = -Infinity; // when audio alone last un-muted; a re-mute soon after locks audio recovery
+    this.audioLocked = false;
   }
 
   get state() { return this._state; }
 
-  _enter(state, reason) {
+  _enter(state, reason, t) {
+    if (state === 'COMMERCIAL') this.audioLocked = (t ?? 0) - this.lastAudioRecoverT <= this.o.flapGuardSec;
+    else if (reason === 'audio') this.lastAudioRecoverT = t ?? 0;
+    else this.lastAudioRecoverT = -Infinity; // scoreboard (or the max-length valve) vouches for the game: clear the guard
     this._state = state; this.reason = reason;
     this.adStreak = 0; this.adVotes = []; this.audioOnlyStreak = 0; this.audioOnlyVotes = []; this.dipStreak = 0; this.recoverStreak = 0;
     this.simWindow = []; this.commercialSec = 0; this.lastCut = false;
@@ -62,12 +67,12 @@ export class Detector {
       if (!hasVision) {
         // audio-only mode (no video / scoreboard never learned)
         this.audioOnlyStreak = adLike ? this.audioOnlyStreak + 1 : 0;
-        if (this.audioOnlyStreak >= o.audioOnlyAdSec) { this._enter('COMMERCIAL', 'audio-only'); return this._verdict(); }
+        if (this.audioOnlyStreak >= o.audioOnlyAdSec) { this._enter('COMMERCIAL', 'audio-only', s.t); return this._verdict(); }
         if (hasAd) {
           this.audioOnlyVotes.push(s.adProb >= o.adVoteProb ? 1 : 0);
           if (this.audioOnlyVotes.length > o.audioOnlyVoteWindow) this.audioOnlyVotes.shift();
           const hits = this.audioOnlyVotes.reduce((a, b) => a + b, 0);
-          if (hits >= o.audioOnlyVoteHits) { this._enter('COMMERCIAL', 'audio-only-vote'); return this._verdict(); }
+          if (hits >= o.audioOnlyVoteHits) { this._enter('COMMERCIAL', 'audio-only-vote', s.t); return this._verdict(); }
         }
         return this._verdict();
       }
@@ -78,10 +83,10 @@ export class Detector {
       const cut = s.blackCut || this.lastCut;
       this.lastCut = !!s.blackCut;
       if (cut && this.goneSec > 0) {
-        this._enter('COMMERCIAL', 'black-cut'); return this._verdict();
+        this._enter('COMMERCIAL', 'black-cut', s.t); return this._verdict();
       }
       if (s.adProb === null || s.adProb === undefined) {
-        if (this.goneSec >= o.coldGoneSec) { this._enter('COMMERCIAL', 'cold-start'); return this._verdict(); }
+        if (this.goneSec >= o.coldGoneSec) { this._enter('COMMERCIAL', 'cold-start', s.t); return this._verdict(); }
         return this._verdict();
       }
       if (this.goneSec > o.goneSec) {
@@ -95,9 +100,9 @@ export class Detector {
             if (this.adVotes.length > o.adVoteWindow) this.adVotes.shift();
           }
         }
-        if (this.adStreak >= o.adProbSec) { this._enter('COMMERCIAL', 'audio'); return this._verdict(); }
+        if (this.adStreak >= o.adProbSec) { this._enter('COMMERCIAL', 'audio', s.t); return this._verdict(); }
         const hits = this.adVotes.reduce((a, b) => a + b, 0);
-        if (hits >= o.adVoteHits) { this._enter('COMMERCIAL', 'audio-vote'); return this._verdict(); }
+        if (hits >= o.adVoteHits) { this._enter('COMMERCIAL', 'audio-vote', s.t); return this._verdict(); }
       }
       return this._verdict();
     }
@@ -105,17 +110,20 @@ export class Detector {
     // --- COMMERCIAL
     this.commercialSec++;
     if (hasVision) this.goneSec++;
-    if (hasVision && vis >= o.recoverVisFast) { this._enter('GAME', 'scoreboard'); return this._verdict(); }
+    if (hasVision && vis >= o.recoverVisFast) { this._enter('GAME', 'scoreboard', s.t); return this._verdict(); }
     if (hasVision && vis >= o.recoverVisSlow) this.recoverStreak++; else this.recoverStreak = 0;
-    if (this.recoverStreak >= o.recoverSlowFrames) { this._enter('GAME', 'scoreboard'); return this._verdict(); }
+    if (this.recoverStreak >= o.recoverSlowFrames) { this._enter('GAME', 'scoreboard', s.t); return this._verdict(); }
     // Near-silent ad seconds score as "game-like" against the bank; only speech or music can vouch for the game.
-    if (s.gameSim !== null && s.gameSim !== undefined && !ambient) {
+    // Audio alone may un-mute once per break: if that was wrong (re-muted within flapGuardSec), only the
+    // scoreboard can end the break. Without video there is no scoreboard, so the guard is skipped.
+    const audioAllowed = !hasVision || !this.audioLocked;
+    if (audioAllowed && s.gameSim !== null && s.gameSim !== undefined && !ambient) {
       this.simWindow.push(s.gameSim >= o.recoverSim ? 1 : 0);
       if (this.simWindow.length > o.recoverSimWindow) this.simWindow.shift();
       const hits = this.simWindow.reduce((a, b) => a + b, 0);
-      if (hits >= o.recoverSimHits) { this._enter('GAME', 'audio'); return this._verdict(); }
+      if (hits >= o.recoverSimHits) { this._enter('GAME', 'audio', s.t); return this._verdict(); }
     }
-    if (this.commercialSec >= o.maxCommercialSec) { this._enter('GAME', 'max-commercial'); return this._verdict(); }
+    if (this.commercialSec >= o.maxCommercialSec) { this._enter('GAME', 'max-commercial', s.t); return this._verdict(); }
     return this._verdict();
   }
 

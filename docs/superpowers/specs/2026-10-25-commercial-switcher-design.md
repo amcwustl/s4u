@@ -188,9 +188,16 @@ Stay in GAME (do not enter COMMERCIAL) when:
   music (crowd, whistles) — this counts as neither game nor ad.
 
 Leave COMMERCIAL (return to GAME) when either:
-- scoreboard ≥ 85% visible in one frame, or ≥ 40% in 3 consecutive frames; or
-- game similarity ≥ 0.70 in 5 of the last 6 seconds that carried speech or music
+- scoreboard ≥ 85% visible in one frame, or ≥ 50% in 3 consecutive frames; or
+- game similarity ≥ 0.70 in 10 of the last 12 seconds that carried speech or music
   (near-silent seconds score game-like against the bank and are ignored).
+
+Audio alone may un-mute only once per break: if a break re-starts within 20 s of
+an audio recovery, that recovery was a talking ad, and only the scoreboard can
+end the break (flap guard). The guard is cleared by any scoreboard recovery and
+never applies without video, where audio is the only way back. Coming back late
+is the preferred failure: the owner would rather hear Spotify a little into the
+game than hear an ad.
 
 Never leave COMMERCIAL on the network logo alone: ads reuse network graphics.
 
