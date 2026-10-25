@@ -79,3 +79,34 @@ test('toGray and meanLuminance', () => {
   assert.equal(meanLuminance(new Uint8Array(10)), 0);
   assert.equal(meanLuminance(Uint8Array.from([100, 200])), 150);
 });
+
+test('thin edge lines (letterbox borders) are not learned as graphics', () => {
+  const g = rng(5), L = new ScoreboardLearner();
+  for (let i = 0; i < 61; i++) {
+    const f = gameFrame(g);
+    for (let x = 0; x < W; x++) { f[2 * W + x] = 255; f[3 * W + x] = 0; f[176 * W + x] = 0; f[177 * W + x] = 255; } // 1-2 px bright/dark lines
+    L.push(f);
+  }
+  assert.equal(L.learned, true);
+  const comps = L.components();
+  assert.equal(comps.length, 2, JSON.stringify(comps));
+  assert.ok(comps.every(c => c.h >= 4 && c.w >= 4));
+});
+
+test('a window with no fixed graphics does not count as learned; learning retries and then succeeds', () => {
+  const g = rng(9), L = new ScoreboardLearner();
+  for (let i = 0; i < 61; i++) L.push(noiseFrame(g));
+  assert.equal(L.learned, false);
+  assert.equal(L.attempts, 1);
+  assert.ok(L.progress < 0.1, `progress restarted, got ${L.progress}`);
+  for (let i = 0; i < 61; i++) L.push(gameFrame(g));
+  assert.equal(L.learned, true);
+  assert.equal(L.components().find(c => c.kind === 'scoreboard').y >= SCOREBOARD.y - 2, true);
+});
+
+test('a scoreboard present in only 65% of the learning window is still learned', () => {
+  const g = rng(13), L = new ScoreboardLearner();
+  for (let i = 0; i < 61; i++) L.push(i % 20 < 13 ? gameFrame(g) : noiseFrame(g));
+  assert.equal(L.learned, true);
+  assert.ok(L.components().some(c => c.kind === 'scoreboard'));
+});

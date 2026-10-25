@@ -8,9 +8,12 @@ export const PIPELINE_DEFAULTS = {
   adBankAfterSec: 40,    // seconds into a commercial before its sound is banked as "ad"
   adBankMusic: 0.5,
   blackLum: 8,
-  blackRms: 0.005,
+  blackRms: 0.01,
   relearnVis: 0.2,
   relearnSec: 60,
+  bootstrapSec: 45,      // until the scoreboard is learned, assume the game is on this long after arming
+  rmsWindow: 1600,       // 100 ms sub-windows for detecting brief silences at cuts
+  keepScores: false,     // store the feature vector on every record (fixture/tuning runs)
 };
 
 export function createPipeline({ learner, detector, controller, gameBank, adBank, classify, log, onActions, opts = {} }) {
@@ -40,20 +43,29 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
     frames = [];
 
     // --- audio
-    let rms = null, feats = null;
+    let rms = null, rmsMin = null, feats = null;
     if (pcm) {
       let s = 0;
       for (let i = 0; i < pcm.length; i++) s += pcm[i] * pcm[i];
       rms = Math.sqrt(s / pcm.length);
+      for (let w = 0; w + o.rmsWindow <= pcm.length; w += o.rmsWindow) {
+        let ws = 0;
+        for (let i = w; i < w + o.rmsWindow; i++) ws += pcm[i] * pcm[i];
+        const r = Math.sqrt(ws / o.rmsWindow);
+        rmsMin = rmsMin === null ? r : Math.min(rmsMin, r);
+      }
       feats = classify(pcm);
     }
-    const blackCut = minLum !== null && rms !== null && minLum < o.blackLum && rms < o.blackRms;
+    // A cut to black with a momentary silence: break boundaries and ad-to-ad cuts look like this; play never does.
+    const blackCut = minLum !== null && rmsMin !== null && minLum < o.blackLum && rmsMin < o.blackRms;
 
     // --- banks
-    if (feats && scoreboardVis !== null && scoreboardVis >= o.holdVis) gameBank.add(feats.scores);
-    if (feats && detector.state === 'COMMERCIAL' && detector.commercialSec >= o.adBankAfterSec && feats.music >= o.adBankMusic) adBank.add(feats.scores);
-    const gameSim = feats ? gameSimilarity(gameBank, feats.scores) : null;
-    const adProb = feats ? adProbability(gameBank, adBank, feats.scores) : null;
+    const bootstrapping = !learner.learned && t < o.bootstrapSec;
+    const vec = feats ? (feats.embedding ?? feats.scores) : null;
+    if (vec && ((scoreboardVis !== null && scoreboardVis >= o.holdVis) || bootstrapping)) gameBank.add(vec);
+    if (vec && detector.state === 'COMMERCIAL' && detector.commercialSec >= o.adBankAfterSec && feats.music >= o.adBankMusic) adBank.add(vec);
+    const gameSim = vec ? gameSimilarity(gameBank, vec) : null;
+    const adProb = vec ? adProbability(gameBank, adBank, vec) : null;
 
     const sample = {
       t, scoreboardVis, logoVis, gameSim, adProb,
@@ -70,9 +82,10 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
 
     const record = {
       ...sample, verdict, muted: controller.muted, shadow: controller.shadow, paused: controller.paused,
-      learned: learner.learned, progress: learner.progress, lum: minLum, rms, silence: feats?.silence ?? null,
+      learned: learner.learned, progress: learner.progress, lum: minLum, rms, rmsMin, silence: feats?.silence ?? null,
       gameBank: gameBank.size, adBank: adBank.size,
     };
+    if (o.keepScores && feats) { record.scores = Array.from(feats.scores); if (feats.embedding) record.embedding = Array.from(feats.embedding); }
     log.push(record);
     return record;
   }

@@ -10,3 +10,9 @@ ffmpeg -v error -y -i "$IN" -an -vf "fps=2,scale=320:180" -c:v libvpx -b:v 400k 
 ffmpeg -v error -y -i "$IN" -vn -ac 1 -ar 16000 -c:a pcm_s16le "$OUT/audio-16k.wav"
 ffmpeg -v error -y -i "$IN" -vf "fps=1/10,scale=240:-1,drawtext=text='%{pts\:hms}':x=4:y=4:fontsize=18:fontcolor=yellow:box=1:boxcolor=black@0.6,tile=6x9" -frames:v 1 "$OUT/montage.jpg"
 ls -la "$OUT"
+# Raw inputs for the fixture player's headless mode (no browser media decoding needed):
+#   frames-320x180.gray  = 2 fps, 320x180, 8-bit gray, concatenated (57600 bytes/frame)
+#   audio-16k.f32        = 16 kHz mono float32 little-endian
+ffmpeg -v error -y -i "$OUT/video-320.webm" -vf "fps=2,scale=320:180,format=gray" -f rawvideo "$OUT/frames-320x180.gray"
+ffmpeg -v error -y -i "$OUT/audio-16k.wav" -f f32le -ac 1 -ar 16000 "$OUT/audio-16k.f32"
+ls -la "$OUT"/frames-320x180.gray "$OUT"/audio-16k.f32

@@ -31,19 +31,24 @@ function sobel(g, w, h, out) {
 }
 
 export class ScoreboardLearner {
-  constructor({ w = FRAME_W, h = FRAME_H, learnFrames = 60, stableFrac = 0.7, diffT = 12, gradT = 20, minArea = 40, frozenT = 1.0, matchT = 24 } = {}) {
-    Object.assign(this, { w, h, learnFrames, stableFrac, diffT, gradT, minArea, frozenT, matchT });
+  constructor({ w = FRAME_W, h = FRAME_H, learnFrames = 60, stableFrac = 0.6, diffT = 12, gradT = 20, minArea = 40, minThick = 4, scoreboardMinArea = 150, frozenT = 1.0, matchT = 24 } = {}) {
+    Object.assign(this, { w, h, learnFrames, stableFrac, diffT, gradT, minArea, minThick, scoreboardMinArea, frozenT, matchT });
+    this.attempts = 0;
     this.reset();
   }
 
   reset() {
     this.prev = null;
-    this.count = new Uint16Array(this.w * this.h);
-    this.grad = new Float32Array(this.w * this.h);
-    this.accepted = 0;
+    this._restartWindow();
     this.template = null;
     this.comps = [];
     this._learned = false;
+  }
+
+  _restartWindow() {
+    this.count = new Uint16Array(this.w * this.h);
+    this.grad = new Float32Array(this.w * this.h);
+    this.accepted = 0;
   }
 
   get learned() { return this._learned; }
@@ -71,9 +76,17 @@ export class ScoreboardLearner {
     const need = this.stableFrac * this.accepted;
     const mask = new Uint8Array(w * h);
     for (let i = 0; i < mask.length; i++) if (this.count[i] >= need) mask[i] = 1;
+    // Drop specks and thin lines (letterbox edges, field lines): a graphic has some thickness.
+    const comps = this._components(mask).filter(c => c.area >= this.minArea && c.w >= this.minThick && c.h >= this.minThick);
+    comps.sort((a, b) => b.area - a.area);
+    this.attempts++;
+    if (!comps.length || comps[0].area < this.scoreboardMinArea) {
+      // Nothing scoreboard-sized held still in this window (replays, wide shots, graphics): try the next window.
+      this._restartWindow();
+      return;
+    }
     this.template = Uint8Array.from(gray);
-    this.comps = this._components(mask).filter(c => c.area >= this.minArea);
-    this.comps.sort((a, b) => b.area - a.area);
+    this.comps = comps;
     this.comps.forEach((c, i) => { c.kind = i === 0 ? 'scoreboard' : 'logo'; });
     this._learned = true;
   }

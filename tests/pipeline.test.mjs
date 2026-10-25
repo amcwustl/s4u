@@ -90,3 +90,47 @@ test('scoreboard lost for 60 s while audio still says game triggers a relearn ev
   assert.equal(parts.learner.resets, 1);
   assert.ok(parts.log.toJSON().events.some(e => e.name === 'relearn'));
 });
+
+test('before the scoreboard is learned, the first 45 s of audio bootstrap the game bank', () => {
+  const { p, parts } = setup();
+  parts.learner.learned = false;
+  for (let t = 0; t < 50; t++) p.tick(t, pcm(0.1));
+  assert.equal(parts.gameBank.size, 45);
+  const rec = p.tick(50, pcm(0.1));
+  assert.ok(rec.adProb !== null, 'audio profile available in audio-only mode');
+});
+
+test('a black frame with a brief silent gap inside an otherwise loud second is a black cut', () => {
+  const { p } = setup();
+  const loudWithGap = new Float32Array(16000).fill(0.2);
+  loudWithGap.fill(0, 8000, 9600);                 // 100 ms of silence
+  p.onFrame(frame(0, 0, 2));
+  const rec = p.tick(0, loudWithGap);
+  assert.equal(rec.blackCut, true);
+  assert.ok(rec.rmsMin < 0.01 && rec.rms > 0.1, `rmsMin ${rec.rmsMin} rms ${rec.rms}`);
+});
+
+test('keepScores option stores the feature vector on each record', () => {
+  const actions = [];
+  const parts = {
+    learner: fakeLearner(), detector: new Detector(), controller: new Controller(),
+    gameBank: new Bank(), adBank: new Bank(), log: new SampleLog(),
+    classify: () => ({ scores: GAME_VEC, speech: 0.8, music: 0.1, silence: 0 }), onActions: (a) => actions.push(...a),
+    opts: { keepScores: true },
+  };
+  const p = createPipeline(parts);
+  const rec = p.tick(0, pcm(0.1));
+  assert.equal(rec.scores.length, 521);
+  const { scores, ...rest } = createPipeline({ ...parts, opts: {} }).tick(0, pcm(0.1));
+  assert.equal(scores, undefined);
+});
+
+test('banks use the embedding when the classifier provides one, else the class scores', () => {
+  const emb = Float32Array.from({ length: 1024 }, (_, i) => (i === 3 ? 1 : 0));
+  const withEmb = setup({ classify: () => ({ scores: GAME_VEC, embedding: emb, speech: 0.8, music: 0.1, silence: 0 }) });
+  withEmb.p.onFrame(frame(255, 255)); withEmb.p.tick(0, pcm(0.1));
+  assert.equal(withEmb.parts.gameBank.items[0].length, 1024);
+  const noEmb = setup();
+  noEmb.p.onFrame(frame(255, 255)); noEmb.p.tick(0, pcm(0.1));
+  assert.equal(noEmb.parts.gameBank.items[0].length, 521);
+});

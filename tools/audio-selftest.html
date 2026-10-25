@@ -29,6 +29,13 @@ try {
   log(`silence score: ${silence.silence.toFixed(2)}`);
   check('silence > 0.5', silence.silence > 0.5);
   check('521 scores', r.scores.length === 521);
+  const cos = (a, b) => { let d = 0, na = 0, nb = 0; for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; } return d / Math.sqrt(na * nb); };
+  const noise = Float32Array.from({ length: 16000 }, () => (Math.random() * 2 - 1) * 0.3);
+  const e1 = af.classify(sine).embedding, e2 = af.classify(sine).embedding, e3 = af.classify(noise).embedding;
+  log(`embedding dims ${e1?.length}; cos(sine,sine)=${cos(e1, e2).toFixed(3)} cos(sine,noise)=${cos(e1, e3).toFixed(3)}`);
+  check('1024-d embedding', e1?.length === 1024);
+  check('same sound ~1', cos(e1, e2) > 0.99);
+  check('different sounds clearly lower', cos(e1, e3) < 0.9);
   out.className = results.every(Boolean) ? 'ok' : 'bad';
   document.title = results.every(Boolean) ? 'SELFTEST PASS' : 'SELFTEST FAIL';
 } catch (e) {

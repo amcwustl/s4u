@@ -141,3 +141,31 @@ test('custom goneSec shifts the clean-break transition', () => {
   assert.equal(firstT(vs, 'COMMERCIAL'), 66);
   assert.equal(DEFAULTS.goneSec, 3);
 });
+
+test('streaky ad audio is caught by a majority vote over the last 10 s', () => {
+  const d = new Detector();
+  run(d, seq(60, {}));
+  const probs = [0.9, 0.6, 0.4, 0.9, 0.6, 0.9, 0.6, 0.4, 0.9, 0.6, 0.6, 0.4, 0.9];
+  const vs = run(d, probs.map((adProb, i) => ({ ...AD, adProb, t: 60 + i })));
+  const t = firstT(vs, 'COMMERCIAL');
+  assert.equal(vs.find(v => v.t === t).reason, 'audio-vote');
+  assert.equal(t, 70); // votes start at t=63 (goneSec > 3); the 7th hit ≥ 0.5 lands at t=70
+});
+
+test('a short produced package (8 s of mildly ad-like audio) never mutes', () => {
+  const d = new Detector();
+  run(d, seq(60, {}));
+  const vs = run(d, seq(8, { ...AD, adProb: 0.6 }, 60));
+  assert.ok(vs.every(v => v.state === 'GAME'));
+  const back = run(d, seq(3, {}, 68));
+  assert.ok(back.every(v => v.state === 'GAME'));
+});
+
+test('announcer-level speech (0.45) is not ambient: ambientMax is 0.2', () => {
+  const d = new Detector();
+  run(d, seq(60, {}));
+  // announcer-level speech (0.45) with ad-like audio must count toward the streak
+  const vs = run(d, seq(6, { ...AD, speech: 0.45, music: 0.0, adProb: 0.9 }, 60));
+  assert.equal(firstT(vs, 'COMMERCIAL'), 64);
+  assert.equal(DEFAULTS.ambientMax, 0.2);
+});
