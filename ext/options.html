@@ -17,6 +17,8 @@
 <label><input type="checkbox" id="launchSpotify"> Launch Spotify in the background if it isn't running</label>
 <label for="fadeMs">Fade duration (ms)</label>
 <input type="number" id="fadeMs" min="0" max="3000" step="50">
+<label><input type="checkbox" id="keepEmbeddings"> Keep audio embeddings in the log</label>
+<div class="hint">Adds ~4 KB per second to the exported log (≈45 MB for a 3-hour game). Lets the sound banks be re-tuned offline from a live run. Takes effect the next time the extension is armed.</div>
 <label for="detector">Detector threshold overrides (JSON)</label>
 <textarea id="detector" placeholder='{"goneSec": 3, "adProb": 0.75}'></textarea>
 <div class="hint">Keys must exist in the detector defaults. Leave empty for defaults.</div>

@@ -3,6 +3,8 @@
 // in units of the bank's standard deviation. YAMNet embeddings are all-positive, so raw cosines
 // crowd near 1 and only the bank's own spread gives a usable scale.
 export const MIN_GAME_SAMPLES = 20;
+export const MIN_AD_SAMPLES = 20;
+export const AD_Z_MARGIN = 2;   // vector sits 2 sd further outside the game cluster than the ad cluster → compare 1
 export const Z_SCALE = 4;   // z of 4 sd below the bank mean → adProb 1 (z 3 → 0.75, z 2 → 0.5)
 const MIN_SD = 1e-3;
 
@@ -61,11 +63,14 @@ export function gameSimilarity(game, v) {
   return clamp01(1 - game.z(v) / Z_SCALE);
 }
 
+// Raw nearest-cosine comparison sat at ≈ 0.5 for everything (all-positive embeddings) and, averaged in,
+// pulled adProb toward 0.5 once the ad bank existed. The ad bank now only ever raises adProb, and only
+// through the same z-score scale the game bank uses.
 export function adProbability(game, ad, v) {
   const sim = gameSimilarity(game, v);
   if (sim === null) return null;
-  const fromSim = 1 - sim;
-  if (ad.size === 0) return clamp01(fromSim);
-  const compare = (ad.nearest(v) - game.nearest(v) + 1) / 2;
-  return clamp01((compare + fromSim) / 2);
+  const fromSim = clamp01(1 - sim);
+  if (ad.size < MIN_AD_SAMPLES) return fromSim;
+  const compare = clamp01((game.z(v) - ad.z(v)) / AD_Z_MARGIN);
+  return Math.max(fromSim, compare);
 }

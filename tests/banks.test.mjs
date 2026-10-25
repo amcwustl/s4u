@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cosine, Bank, gameSimilarity, adProbability, MIN_GAME_SAMPLES, Z_SCALE } from '../ext/lib/banks.js';
+import { cosine, Bank, gameSimilarity, adProbability, MIN_GAME_SAMPLES, MIN_AD_SAMPLES, Z_SCALE, AD_Z_MARGIN } from '../ext/lib/banks.js';
 
 const v = (...xs) => Float32Array.from(xs);
 const fill = (bank, vec, n) => { for (let i = 0; i < n; i++) bank.add(vec); };
@@ -87,4 +87,26 @@ test('similarity is a z-score against the bank\'s own spread: 2 sd below the mea
   assert.ok(Math.abs(adProbability(g, new Bank(), probe) - Math.min(1, z / Z_SCALE)) < 1e-6);
   assert.ok(Math.abs(gameSimilarity(g, probe) - Math.max(0, 1 - z / Z_SCALE)) < 1e-6);
   assert.equal(Z_SCALE, 4);
+});
+
+test('a small ad bank is ignored: adProbability stays 1 - gameSimilarity', () => {
+  const g = new Bank(), a = new Bank();
+  fill(g, v(1, 0.1, 0), MIN_GAME_SAMPLES);
+  for (let i = 0; i < MIN_AD_SAMPLES - 1; i++) a.add(v(0, 1, i % 3 * 0.1));
+  const x = v(0.5, 0.5, 0);
+  assert.ok(Math.abs(adProbability(g, a, x) - (1 - gameSimilarity(g, x))) < 1e-6);
+});
+
+test('a full ad bank can only raise adProbability, by the z-score margin', () => {
+  const g = new Bank(), a = new Bank();
+  for (let i = 0; i < 40; i++) g.add(v(1, 1, 1, 1 + (i % 4) * 0.3));
+  for (let i = 0; i < 40; i++) a.add(v(1, 0, 0, (i % 4) * 0.3));
+  const probe = v(1, 0.1, 0.1, 0.1);   // inside the ad cluster
+  const gz = g.z(probe), az = a.z(probe);
+  const expected = Math.max(Math.min(1, gz / Z_SCALE), Math.min(1, Math.max(0, (gz - az) / AD_Z_MARGIN)));
+  assert.ok(Math.abs(adProbability(g, a, probe) - expected) < 1e-6);
+  assert.ok(adProbability(g, a, probe) >= adProbability(g, new Bank(), probe));
+  const gameLike = v(1, 1, 1, 1.15);   // inside the game cluster: the ad bank must not lift it
+  assert.ok(adProbability(g, a, gameLike) < 0.15, String(adProbability(g, a, gameLike)));
+  assert.equal(AD_Z_MARGIN, 2);
 });

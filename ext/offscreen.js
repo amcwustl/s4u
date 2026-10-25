@@ -64,7 +64,7 @@ async function readFrames(track) {
       const { value: frame, done } = await reader.read();
       if (done) break;
       const now = performance.now();
-      if (now - last >= 450 && pipeline) { last = now; pushFrame(frame); }
+      if (now - last >= 230 && pipeline) { last = now; pushFrame(frame); } // ≈4 fps: black cuts at a break are brief
       frame.close();
     }
   } catch (e) { console.warn('frame reader ended', e.message); }
@@ -115,6 +115,7 @@ async function startInner({ streamId }) {
   pipeline = createPipeline({
     learner, detector, controller, gameBank: new Bank(), adBank: new Bank(), log,
     classify: (pcm) => audioFeatures.classify(pcm), onActions: applyActions,
+    opts: { keepEmbedding: settings.keepEmbeddings },
   });
   t0 = performance.now();
 
@@ -131,7 +132,7 @@ async function startInner({ streamId }) {
   }
   const videoTrack = stream.getVideoTracks()[0];
   if (videoTrack && 'MediaStreamTrackProcessor' in self) readFrames(videoTrack);
-  else frameTimer = setInterval(grabFrame, 500);
+  else frameTimer = setInterval(grabFrame, 250);
   statusTimer = setInterval(() => {
     hasVideo = performance.now() - lastFrameAt < 2000;
     toSw({ type: 'status', armed: true, hasAudio, hasVideo, blackVideo: hasVideo && lastLum !== null && lastLum < 2, lum: lastLum, learned: learner.learned, progress: learner.progress });

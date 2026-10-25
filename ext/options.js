@@ -5,7 +5,7 @@ const $ = (id) => document.getElementById(id);
 chrome.storage.sync.get(null).then((stored) => {
   const s = mergeSettings(stored);
   $('shadow').checked = s.shadow; $('spotifyMode').value = s.spotifyMode; $('spotifyUri').value = s.spotifyUri;
-  $('launchSpotify').checked = s.launchSpotify; $('fadeMs').value = s.fadeMs;
+  $('launchSpotify').checked = s.launchSpotify; $('fadeMs').value = s.fadeMs; $('keepEmbeddings').checked = s.keepEmbeddings;
   $('detector').value = Object.keys(s.detector).length ? JSON.stringify(s.detector, null, 2) : '';
 });
 
@@ -19,7 +19,7 @@ $('save').onclick = async () => {
   }
   await chrome.storage.sync.set({
     shadow: $('shadow').checked, spotifyMode: $('spotifyMode').value, spotifyUri: $('spotifyUri').value.trim(),
-    launchSpotify: $('launchSpotify').checked, fadeMs: Number($('fadeMs').value) || 300, detector,
+    launchSpotify: $('launchSpotify').checked, fadeMs: Number($('fadeMs').value) || 300, keepEmbeddings: $('keepEmbeddings').checked, detector,
   });
   $('saved').textContent = 'Saved'; setTimeout(() => ($('saved').textContent = ''), 1500);
 };

@@ -5,8 +5,8 @@ import { gameSimilarity, adProbability } from './banks.js';
 
 export const PIPELINE_DEFAULTS = {
   holdVis: 0.8,          // scoreboard this visible → sample feeds the game bank
-  adBankAfterSec: 40,    // seconds into a commercial before its sound is banked as "ad"
-  adBankMusic: 0.5,
+  adBankAfterSec: 20,    // seconds into a commercial before its sound is banked as "ad"
+  adBankSound: 0.2,      // speech or music at least this strong (ambient seconds teach nothing)
   blackLum: 8,
   blackRms: 0.01,
   relearnVis: 0.2,
@@ -14,6 +14,7 @@ export const PIPELINE_DEFAULTS = {
   bootstrapSec: 45,      // until the scoreboard is learned, assume the game is on this long after arming
   rmsWindow: 1600,       // 100 ms sub-windows for detecting brief silences at cuts
   keepScores: false,     // store the feature vector on every record (fixture/tuning runs)
+  keepEmbedding: false,  // store the 1024-d YAMNet embedding on every record (live tuning capture)
 };
 
 export function createPipeline({ learner, detector, controller, gameBank, adBank, classify, log, onActions, opts = {} }) {
@@ -63,7 +64,7 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
     const bootstrapping = !learner.learned && t < o.bootstrapSec;
     const vec = feats ? (feats.embedding ?? feats.scores) : null;
     if (vec && ((scoreboardVis !== null && scoreboardVis >= o.holdVis) || bootstrapping)) gameBank.add(vec);
-    if (vec && detector.state === 'COMMERCIAL' && detector.commercialSec >= o.adBankAfterSec && feats.music >= o.adBankMusic) adBank.add(vec);
+    if (vec && detector.state === 'COMMERCIAL' && detector.commercialSec >= o.adBankAfterSec && Math.max(feats.speech, feats.music) >= o.adBankSound) adBank.add(vec);
     const gameSim = vec ? gameSimilarity(gameBank, vec) : null;
     const adProb = vec ? adProbability(gameBank, adBank, vec) : null;
 
@@ -86,6 +87,7 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
       gameBank: gameBank.size, adBank: adBank.size,
     };
     if (o.keepScores && feats) { record.scores = Array.from(feats.scores); if (feats.embedding) record.embedding = Array.from(feats.embedding); }
+    else if (o.keepEmbedding && feats?.embedding) record.embedding = feats.embedding; // Float32Array; rounded at export
     log.push(record);
     return record;
   }

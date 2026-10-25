@@ -5,6 +5,7 @@ export const SETTINGS_DEFAULTS = {
   spotifyUri: '',
   launchSpotify: true,
   fadeMs: 300,
+  keepEmbeddings: false, // log the audio embedding every second (big export, for offline tuning)
   detector: {},          // overrides for detector DEFAULTS
 };
 export function mergeSettings(stored = {}) {

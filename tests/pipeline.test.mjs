@@ -67,7 +67,7 @@ test('black frame plus near-silence is a black cut', () => {
   assert.equal(p.tick(1, pcm(0.1)).blackCut, false);
 });
 
-test('end to end: learned game sound, then a break mutes and the ad bank fills after 40 s', () => {
+test('end to end: learned game sound, then a break mutes and the ad bank fills after 20 s', () => {
   const { p, parts, actions } = setup();
   for (let t = 0; t < MIN_GAME_SAMPLES + 5; t++) { p.onFrame(frame(255, 255)); p.tick(t, pcm(0.1)); }
   const t0 = MIN_GAME_SAMPLES + 5;
@@ -79,7 +79,7 @@ test('end to end: learned game sound, then a break mutes and the ad bank fills a
   }
   assert.equal(muteAt, t0 + 4);
   assert.ok(actions.some(a => a.type === 'spotify' && a.cmd === 'commercial'));
-  assert.ok(parts.adBank.size > 0 && parts.adBank.size <= 20, `ad bank ${parts.adBank.size}`);
+  assert.ok(parts.adBank.size > 20 && parts.adBank.size <= 40, `ad bank ${parts.adBank.size}`);
 });
 
 test('scoreboard lost for 60 s while audio still says game triggers a relearn event', () => {
@@ -146,4 +146,22 @@ test('setShadow(false) while running switches the controller to real actions and
   p.setShadow(false);
   assert.equal(parts.controller.shadow, false);
   assert.ok(parts.log.toJSON().events.some(e => e.name === 'shadow' && e.data.shadow === false));
+});
+
+test('keepEmbedding option keeps the typed-array embedding and exports it rounded to 3 decimals', () => {
+  const emb = Float32Array.from({ length: 1024 }, (_, i) => (i === 0 ? 0.123456 : 0.5));
+  const parts = {
+    learner: fakeLearner(), detector: new Detector(), controller: new Controller(),
+    gameBank: new Bank(), adBank: new Bank(), log: new SampleLog(),
+    classify: () => ({ scores: GAME_VEC, embedding: emb, speech: 0.8, music: 0.1, silence: 0 }), onActions: () => {},
+    opts: { keepEmbedding: true },
+  };
+  const rec = createPipeline(parts).tick(0, pcm(0.1));
+  assert.ok(rec.embedding instanceof Float32Array);
+  assert.equal(rec.scores, undefined);
+  const out = parts.log.toJSON().samples[0];
+  assert.ok(Array.isArray(out.embedding));
+  assert.equal(out.embedding[0], 0.123);
+  assert.equal(JSON.parse(JSON.stringify(parts.log.toJSON())).samples[0].embedding.length, 1024);
+  assert.ok(createPipeline({ ...parts, opts: {} }).tick(0, pcm(0.1)).embedding === undefined);
 });
