@@ -31,3 +31,12 @@ test('manifest key is an RSA public key (SubjectPublicKeyInfo), never a private 
   // DER SubjectPublicKeyInfo for RSA-2048 begins with this base64 prefix; PKCS8 private keys begin with "MIIEv".
   assert.ok(manifest.key.startsWith('MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A'), 'key is not a public key');
 });
+
+test('manifest injects the badge content script into all frames and declares options', () => {
+  const cs = manifest.content_scripts[0];
+  assert.deepEqual(cs.matches, ['<all_urls>']);
+  assert.equal(cs.all_frames, true);
+  assert.ok(cs.js.includes('badge.js'));
+  assert.ok(cs.css.includes('badge.css'));
+  assert.equal(manifest.options_ui.page, 'options.html');
+});
