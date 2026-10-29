@@ -7,6 +7,7 @@ import { SampleLog } from './lib/log.js';
 import { createPipeline } from './lib/pipeline.js';
 import { createAudioFeatures } from './lib/audio-features.js';
 import { mergeSettings } from './lib/settings.js';
+import { createTestRecorder, testFolderName } from './lib/test-recorder.js'; // TEST-ONLY
 
 const video = document.getElementById('v');
 const canvas = document.createElement('canvas');
@@ -17,6 +18,8 @@ let stream = null, playCtx = null, gain = null, anaCtx = null;
 let frameTimer = null, tickTimer = null, statusTimer = null, frameReader = null;
 let pipeline = null, learner = null, log = null, settings = mergeSettings();
 let audioFeatures = null, t0 = 0, hasAudio = false, hasVideo = false, lastFrameAt = 0, lastLum = null;
+let ready = Promise.resolve(); // settles when the latest start() has finished
+let testRec = null; // TEST-ONLY
 
 const toSw = (msg) => chrome.runtime.sendMessage({ target: 'sw', ...msg }).catch(() => {});
 
@@ -140,7 +143,34 @@ async function startInner({ streamId }) {
   toSw({ type: 'badge', text: 'Learning…' });
 }
 
+// TEST-ONLY: record a copy of the captured tab next to the log (see lib/test-recorder.js).
+async function testStart() {
+  await ready;
+  if (!stream || !log) return { ok: false, error: 'not armed' };
+  if (testRec) return { ok: true };
+  const folder = testFolderName();
+  log.max = Math.max(log.max, 6 * 3600); // a whole game with pregame and overtime
+  testRec = createTestRecorder({
+    stream: new MediaStream(stream.getTracks().map(tr => tr.clone())),
+    folder, save: saveToDownloads, getLog: () => log.toJSON(),
+  });
+  log.event('testRecording', { t: Math.round(performance.now() - t0) / 1000, folder }); // video 0 s = this log t
+  return { ok: true, folder };
+}
+
+// TEST-ONLY: offscreen documents cannot download; the service worker does, from a blob URL that has to
+// stay alive until the download completes.
+async function saveToDownloads(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const r = await chrome.runtime.sendMessage({ target: 'sw', type: 'testSave', url, filename });
+    if (!r?.ok) console.warn('test save failed', filename, r?.error);
+  } catch (e) { console.warn('test save failed', filename, e.message); }
+  finally { URL.revokeObjectURL(url); }
+}
+
 async function stop(notify) {
+  if (testRec) { await testRec.stop(); testRec = null; } // TEST-ONLY: save the recording before the stream goes
   clearInterval(frameTimer); clearInterval(tickTimer); clearInterval(statusTimer);
   frameTimer = tickTimer = statusTimer = null;
   if (frameReader) { frameReader.cancel().catch(() => {}); frameReader = null; }
@@ -156,8 +186,9 @@ async function stop(notify) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.target !== 'offscreen') return;
-  if (msg.type === 'start') start(msg);
-  else if (msg.type === 'stop') stop(false);
+  if (msg.type === 'start') ready = start(msg);
+  else if (msg.type === 'stop') { stop(false).then(() => sendResponse(true)); return true; } // reply once saved
+  else if (msg.type === 'testStart') { testStart().then(sendResponse, (e) => sendResponse({ ok: false, error: e.message })); return true; } // TEST-ONLY
   else if (msg.type === 'settings') { settings = mergeSettings(msg.settings); if (pipeline) pipeline.setShadow(settings.shadow); }
   else if (msg.type === 'override' && pipeline) pipeline.override(msg.kind);
   else if (msg.type === 'label' && log) log.event('label', { label: msg.label });
