@@ -19,6 +19,15 @@ It starts in **shadow mode**: it decides but never mutes or touches Spotify. Rig
 - `Option+Shift+P` pause/resume automatic switching
 - Right-click the icon → **Open debug panel** / **Settings**
 
+## 🧪 Test recording (temporary — remove once tuning is done)
+
+Right-click the icon → **🧪 TEST: record game (video + log)**. It turns the extension on for the tab (if it
+isn't already) and records what the detector sees into `~/Downloads/s4u-test-<time>/`: a first part after a
+minute, one every 15 minutes, and the rest when you stop. Right-click → **🧪 TEST: stop recording and save**
+(or click the icon off) saves everything and turns it off. `cat part-*.webm > game.webm` joins the parts.
+
+Everything for this is marked `TEST-ONLY` (`ext/lib/test-recorder.js`, the `downloads` permission).
+
 ## Develop
 
 ```bash

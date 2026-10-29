@@ -33,6 +33,50 @@ chrome.storage.onChanged.addListener(async (_changes, area) => {
   toOffscreen({ type: 'settings', settings });
 });
 
+// TEST-ONLY: the "🧪 TEST" menu item arms the tab and records video + log to Downloads/s4u-test-…/.
+const TEST_MENU = { off: '🧪 TEST: record game (video + log)', on: '🧪 TEST: stop recording and save' };
+let testRecording = false;
+let testSaveError = null;
+async function setTestRecording(on) {
+  testRecording = on;
+  if (on) testSaveError = null;
+  await chrome.storage.session.set({ testRecording: on });
+  chrome.contextMenus.update('test', { title: TEST_MENU[on ? 'on' : 'off'] }, () => void chrome.runtime.lastError);
+  await chrome.action.setBadgeBackgroundColor({ color: on ? '#d32f2f' : '#3c4043' });
+}
+async function toggleTest(tab) {
+  if (testRecording) { await disarm(); return; } // disarm waits until every part is saved
+  try {
+    const armed = await getArmedTabId();
+    if (armed !== tab.id) { if (armed !== null) await disarm(); await arm(tab); }
+    const r = await toOffscreen({ type: 'testStart' });
+    if (!r?.ok) throw new Error(r?.error ?? 'recording did not start');
+    await setTestRecording(true);
+    await setBadge(lastBadge);
+  } catch (e) {
+    lastError = `test recording: ${e.message}`;
+    await chrome.action.setBadgeText({ text: 'ERR' });
+    updateTitle();
+  }
+}
+// Offscreen documents cannot download; they hand over a blob URL and keep it alive until this resolves.
+async function testSave(url, filename) {
+  try {
+    const id = await chrome.downloads.download({ url, filename, saveAs: false, conflictAction: 'overwrite' });
+    for (let i = 0; i < 600; i++) { // ≤ 5 min
+      const [d] = await chrome.downloads.search({ id });
+      if (d?.state === 'complete') return { ok: true };
+      if (!d || d.state === 'interrupted') throw new Error(d?.error ?? 'download disappeared');
+      await new Promise(r => setTimeout(r, 500));
+    }
+    throw new Error('timed out');
+  } catch (e) {
+    testSaveError = `${filename}: ${e.message}`;
+    updateTitle();
+    return { ok: false, error: e.message };
+  }
+}
+
 async function getArmedTabId() { return (await chrome.storage.session.get('armedTabId')).armedTabId ?? null; }
 async function setArmedTabId(id) { await chrome.storage.session.set({ armedTabId: id }); }
 
@@ -55,7 +99,8 @@ function updateTitle() {
   const title = lastStatus?.armed
     ? `Commercial Switcher: ${lastBadge || 'armed'}${settings.shadow ? ' [SHADOW]' : ''} — ${spotify} — audio ${lastStatus.hasAudio ? 'yes' : 'NO'}, video ${lastStatus.hasVideo ? (lastStatus.blackVideo ? 'BLACK' : 'yes') : 'NO'}`
     : lastError ? `Commercial Switcher: off — last error: ${lastError}` : 'Commercial Switcher: off';
-  chrome.action.setTitle({ title });
+  const test = testRecording ? `🧪 TEST RECORDING${testSaveError ? ` — SAVE FAILED ${testSaveError}` : ''}\n` : ''; // TEST-ONLY
+  chrome.action.setTitle({ title: test + title });
 }
 const BADGE_CODES = { 'Learning…': 'ON', Game: 'ARM', Muted: 'MUTE', Paused: 'II', Off: '', 'SHADOW: would mute': 'SHDW', 'SHADOW: would unmute': 'ARM' };
 async function setBadge(text) {
@@ -63,17 +108,18 @@ async function setBadge(text) {
   await chrome.action.setBadgeText({ text: BADGE_CODES[text] ?? 'ON' });
   updateTitle();
   const tabId = await getArmedTabId();
-  if (tabId !== null) chrome.tabs.sendMessage(tabId, { type: 'badge', text, shadow: settings.shadow, spotify: host.state.connected }).catch(() => {});
+  if (tabId !== null) chrome.tabs.sendMessage(tabId, { type: 'badge', text, shadow: settings.shadow, spotify: host.state.connected, test: testRecording }).catch(() => {});
 }
 
 async function disarm() {
-  await toOffscreen({ type: 'stop' });   // offscreen runs controller.end() → may send spotify game
+  await toOffscreen({ type: 'stop' });   // offscreen saves any test recording, runs controller.end() → may send spotify game
   await new Promise(r => setTimeout(r, 150));
   await inflight;                        // let that Spotify pause complete (bounded by the 2 s reply timeout)
   await closeOffscreen();
   await setArmedTabId(null);
   host.stop();
   lastStatus = null;
+  if (testRecording) await setTestRecording(false); // TEST-ONLY
   await setBadge('Off');
 }
 
@@ -123,6 +169,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       lastStatus = msg; updateTitle();
     } else if (msg.type === 'badge') setBadge(msg.text);
     else if (msg.type === 'actions') { applySpotify(msg.actions).then(() => sendResponse({ ok: true })); return true; }
+    else if (msg.type === 'testSave') { testSave(msg.url, msg.filename).then(sendResponse); return true; } // TEST-ONLY
     else if (msg.type === 'sample') for (const p of debugPorts) p.postMessage(msg);
     return;
   }
@@ -145,8 +192,10 @@ chrome.runtime.onConnect.addListener((port) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: 'debug', title: 'Open debug panel', contexts: ['action'] });
   chrome.contextMenus.create({ id: 'options', title: 'Settings', contexts: ['action'] });
+  chrome.contextMenus.create({ id: 'test', title: TEST_MENU[testRecording ? 'on' : 'off'], contexts: ['action'] }); // TEST-ONLY
 });
-chrome.contextMenus.onClicked.addListener((info) => {
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'test' && tab) toggleTest(tab); // TEST-ONLY
   if (info.menuItemId === 'debug') chrome.tabs.create({ url: chrome.runtime.getURL('debug.html') });
   if (info.menuItemId === 'options') chrome.runtime.openOptionsPage();
 });
@@ -154,6 +203,9 @@ chrome.contextMenus.onClicked.addListener((info) => {
 // MV3 service workers restart at will. If a tab is still armed (offscreen document keeps running),
 // restore settings and the Spotify connection so breaks keep switching.
 getArmedTabId().then(async (id) => {
+  const { testRecording: rec = false } = await chrome.storage.session.get('testRecording'); // TEST-ONLY
+  testRecording = rec && id !== null;
+  chrome.contextMenus.update('test', { title: TEST_MENU[testRecording ? 'on' : 'off'] }, () => void chrome.runtime.lastError);
   if (id === null) return;
   await loadSettings();
   host.start();

@@ -48,7 +48,8 @@
     const box = root.querySelector('.b'), dot = root.querySelector('.dot');
     const state = stateOf(msg.text);
     dot.className = `dot ${state}`;
-    root.querySelector('.txt').textContent = msg.text + (msg.shadow && state !== 'shadow' && state !== 'off' ? ' [shadow]' : '');
+    root.querySelector('.txt').textContent = msg.text + (msg.shadow && state !== 'shadow' && state !== 'off' ? ' [shadow]' : '')
+      + (msg.test && state !== 'off' ? ' · 🧪 TEST REC' : ''); // TEST-ONLY
     root.querySelector('.sp').textContent = msg.spotify ? 'Spotify ✓' : 'Spotify ✗';
     root.querySelector('[data-k=toggleMute]').textContent = state === 'muted' ? 'Unmute' : 'Mute';
     root.querySelector('[data-k=togglePause]').textContent = state === 'paused' ? 'Resume' : 'Pause';
