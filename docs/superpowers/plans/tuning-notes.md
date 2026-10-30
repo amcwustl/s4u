@@ -97,3 +97,52 @@ Changes (owner's direction: be sure the game is back before un-muting):
 | this run | 218C 276G 289C 322G 324C 360G 383C 392G 901C 942G 948C 1051G | 218C 360G 383C 398G 901C 1056G |
 | 17:31 run | 118C 123G 206C 309G | 118C 128G 206C (no return by log end; scoreboard never came back) |
 | run4 fixture | 319C 451G, 14 s billboard muted | 319C 457G, 20 s billboard muted |
+
+## 2026-10-29 — first half, Panthers at Packers (TNF on Prime Video, live, Shadow off, 🧪 TEST recording)
+
+Recording `s4u-test-2026-10-30T00-17-21`: 5378 s of video + log, fullscreen from t ≈ 1. Ground truth read off
+the video (1 s frame strips around every transition), not off the detector's signals. Nine breaks, every one
+opening on a black frame; one 30 s Grubhub squeeze-back (ad beside a small game window) with no black cut.
+Bumpers, sponsor slates and Prime promos at break edges, a Charles Schwab sponsored feature (2257–2287) and a
+"next week" promo were left unscored.
+
+| | |
+|---|---|
+| scoreboard learned | t = 17 s: the TNF score bug 146×16 @ (86,156), Prime Video logo 18×11 @ (287,6) at 320×180 |
+| ad heard | 7 s of 1259 (≤ 2 s per break, 4 s of the squeeze-back) |
+| game muted | 266 s of 4007: 86 s late returns (2–25 s per break), the rest from 13 mutes that began in play |
+| flaps | re-muted 11 s after a return once (5272 → 5283), 24 s after twice (1493 → 1517, 3696 → 3720) |
+
+Mutes that began in play, all the 2-second `audio` rule with the bug gone 4–10 s (once 21 s) and announcer
+speech ≈ 0.45 scoring adProb 0.8–1.0: a live field goal (1517, 16 s), a punt return (1670, 10 s), a goal-line
+play (3035, 10 s), the kick before two breaks (1329, 3554), full-screen stat graphics (594, 2348), the TNF
+studio desk (2675), "TNF Talk" (4928, 30 s), an injury stoppage and huddles (3720, 3762, 5283), right after
+the Schwab feature (2288).
+
+Underneath:
+1. **Prime takes the score bug down during live play** (kicks, punt returns; frames at 1666 and 1669 show a
+   bare field) and puts up full-screen graphics and studio segments often. "Bug gone 3 s + 2 ad-like seconds"
+   fires on the announcers.
+2. **Black cuts are clean on this broadcast.** All nine breaks have a cut within 0–4 s of their first ad frame,
+   and none of the 45 black-cut seconds falls in play.
+3. **Stale template.** The bug is learned from one frame (0–0, "TNF / 1st & 10"); with the score changed and the
+   centre panel swapping to a "THURSDAY NIGHT FOOTBALL" banner it matches 0.65–0.79 while fully on screen, so
+   holdVis 0.8 rarely holds and recoverVisFast 0.85 rarely fires; the Prime logo does the holding. Returns come
+   on the slow 0.5 × 3 rule, 9 s late on average. Open item.
+
+Change: **`goneSec` 3 → 45** (audio alone starts a break only once the bug has been gone 45 s).
+
+| log | before | after |
+|---|---|---|
+| this run (labelled) | 7 s ad heard, 266 s game muted, 22 mutes | 41 s heard (32 s the squeeze-back), 79 s muted (all late returns), 9 mutes, none in play |
+| this run, goneSec 30 | | 40 s heard, 96 s muted: still mutes at 2288 and 5072 (bug off ~30 s for sponsored segments) |
+| 18:11 run | 218C 360G 383C 398G 901C 1056G | 218C 360G 906C 1056G (false mute at 383 gone; break 5 s later) |
+| 17:31 run | 118C 128G 206C | 118C 128G 220C (break 14 s later, on its black cut) |
+| run4 fixture (2 fps) | 319C 457G, 1 s heard | 346C 457G, 28 s heard: the 2 fps fixture misses the cut at ≈ 318 |
+
+Cost: a break with no black cut (squeeze-backs, or a network that cuts without black) is heard for up to ~45 s.
+
+Also found: no `relearn` event in the whole run, and no on-screen badge in the video. The Prime tab was opened
+before the extension was reloaded at 17:05, and Chrome only injects content scripts into pages loaded after
+that, so the tab had no live badge script: no badge, no override buttons, no relearn on fullscreen. Arming now
+pings the tab and injects `badge.js` when nothing answers.

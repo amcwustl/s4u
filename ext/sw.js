@@ -134,7 +134,20 @@ async function arm(tab) {
   host.start();
   hostSend({ cmd: 'game' }); // make sure Spotify is paused at kickoff; it resumes at the first break
   lastStatus = { armed: true, hasAudio: false, hasVideo: false };
+  await ensureBadge(tab.id);
   await setBadge('Learning…');
+}
+
+// Chrome only injects content scripts into pages loaded after the extension was (re)loaded. A game tab opened
+// before that has no live badge: no on-page badge, no override buttons, no relearn on fullscreen (2026-10-29).
+async function ensureBadge(tabId) {
+  const live = await chrome.tabs.sendMessage(tabId, { type: 'ping' }).catch(() => false);
+  if (live) return;
+  const target = { tabId, allFrames: true };
+  // A dead copy from before the reload may share the page's isolated world: clear its guard and its badge.
+  await chrome.scripting.executeScript({ target, func: () => { delete window.__s4uBadge; document.getElementById('s4u-badge-host')?.remove(); } }).catch(() => {});
+  await chrome.scripting.insertCSS({ target, files: ['badge.css'] }).catch(() => {});
+  await chrome.scripting.executeScript({ target, files: ['badge.js'] }).catch(() => {});
 }
 
 chrome.action.onClicked.addListener(async (tab) => {

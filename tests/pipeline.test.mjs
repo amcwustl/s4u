@@ -25,7 +25,7 @@ const pcm = (amp) => new Float32Array(16000).fill(amp);
 function setup({ classify } = {}) {
   const actions = [];
   const parts = {
-    learner: fakeLearner(), detector: new Detector(), controller: new Controller(),
+    learner: fakeLearner(), detector: new Detector({ goneSec: 3 }), controller: new Controller(),
     gameBank: new Bank(), adBank: new Bank(), log: new SampleLog(),
     classify: classify ?? ((p) => (p[0] > 0.5 ? { scores: AD_VEC, speech: 0.3, music: 0.8, silence: 0 } : { scores: GAME_VEC, speech: 0.8, music: 0.1, silence: 0 })),
     onActions: (a) => actions.push(...a),
@@ -123,7 +123,7 @@ test('a black frame with a brief silent gap inside an otherwise loud second is a
 test('keepScores option stores the feature vector on each record', () => {
   const actions = [];
   const parts = {
-    learner: fakeLearner(), detector: new Detector(), controller: new Controller(),
+    learner: fakeLearner(), detector: new Detector({ goneSec: 3 }), controller: new Controller(),
     gameBank: new Bank(), adBank: new Bank(), log: new SampleLog(),
     classify: () => ({ scores: GAME_VEC, speech: 0.8, music: 0.1, silence: 0 }), onActions: (a) => actions.push(...a),
     opts: { keepScores: true },
@@ -161,7 +161,7 @@ test('setShadow(false) while running switches the controller to real actions and
 test('keepEmbedding option keeps the typed-array embedding and exports it rounded to 3 decimals', () => {
   const emb = Float32Array.from({ length: 1024 }, (_, i) => (i === 0 ? 0.123456 : 0.5));
   const parts = {
-    learner: fakeLearner(), detector: new Detector(), controller: new Controller(),
+    learner: fakeLearner(), detector: new Detector({ goneSec: 3 }), controller: new Controller(),
     gameBank: new Bank(), adBank: new Bank(), log: new SampleLog(),
     classify: () => ({ scores: GAME_VEC, embedding: emb, speech: 0.8, music: 0.1, silence: 0 }), onActions: () => {},
     opts: { keepEmbedding: true },

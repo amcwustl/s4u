@@ -51,7 +51,8 @@
     return 'off';
   }
 
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg?.type === 'ping') { sendResponse(true); return; } // sw: is a live badge script in this tab?
     if (msg?.type !== 'badge') return;
     armed = msg.text !== 'Off';
     if (!hasVideo()) return;

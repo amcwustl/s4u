@@ -174,7 +174,10 @@ audio is a black cut.
 transition rules (initial defaults; all tunable from the debug panel):
 
 Enter COMMERCIAL when either:
-- scoreboard gone ≥ 3 s **and** ad probability ≥ 0.75 for ≥ 2 s; or
+- scoreboard gone ≥ 45 s **and** ad probability ≥ 0.75 for ≥ 2 s (or ≥ 0.5 in 6 of the
+  last 10 s); or. Some broadcasts drop the scoreboard during live kicks and full-screen
+  graphics, and announcer audio often scores ad-like, so audio alone waits; black cuts
+  start most breaks.
 - a black cut occurs while the scoreboard is gone, however long it has been gone
   (play never cuts to black with silence; the first black cut of a break is often
   the ad-to-ad cut 30–45 s in). A cut inside the last second the scoreboard was

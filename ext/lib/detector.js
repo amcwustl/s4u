@@ -3,8 +3,11 @@
 //   scoreboardVis/logoVis null → no vision (not learned yet, or no video)
 //   gameSim/adProb null        → no audio profile yet (cold start, or no audio)
 // Verdict: { state, reason, goneSec }
+// goneSec: audio alone may start a break only once the scoreboard has been gone this long. Black cuts start
+// breaks at once; on Prime's TNF the bug also leaves during live kicks and full-screen graphics, where the
+// announcers score ad-like (2026-10-29: 3 → 45 removed every in-play mute).
 export const DEFAULTS = {
-  goneSec: 3, adProb: 0.75, adProbSec: 2,
+  goneSec: 45, adProb: 0.75, adProbSec: 2,
   adVoteProb: 0.5, adVoteWindow: 10, adVoteHits: 6, adVoteGoneSec: 10,
   holdVis: 0.8, dipVis: 0.4, dipHoldSec: 3, ambientWindowSec: 30, ambientMax: 0.2,
   recoverVisFast: 0.85, recoverVisSlow: 0.5, recoverSlowFrames: 3,

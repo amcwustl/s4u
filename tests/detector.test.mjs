@@ -5,6 +5,9 @@ import { Detector, DEFAULTS } from '../ext/lib/detector.js';
 const GAME = { scoreboardVis: 0.95, logoVis: 0.9, gameSim: 0.9, adProb: 0.05, speech: 0.8, music: 0.1, blackCut: false };
 const AD = { scoreboardVis: 0, logoVis: 0, gameSim: 0.1, adProb: 0.9, speech: 0.3, music: 0.7, blackCut: false };
 
+// Most tests below exercise the audio-entry rules themselves, at the original 3 s threshold.
+const FAST = { goneSec: 3 };
+
 /** Builds n samples from a partial, with t continuing from `from`. */
 function seq(n, partial, from = 0) {
   return Array.from({ length: n }, (_, i) => ({ ...GAME, ...partial, t: from + i }));
@@ -14,7 +17,7 @@ function run(d, samples) { return samples.map(s => ({ ...d.step(s), t: s.t })); 
 const firstT = (vs, state) => vs.find(v => v.state === state)?.t;
 
 test('clean break: COMMERCIAL at t=64, GAME when the scoreboard returns', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   const vs = run(d, [...seq(60, {}), ...seq(20, AD, 60)]);
   assert.equal(firstT(vs, 'COMMERCIAL'), 64);
   assert.equal(vs[64].reason, 'audio');
@@ -23,13 +26,13 @@ test('clean break: COMMERCIAL at t=64, GAME when the scoreboard returns', () => 
 });
 
 test('long replay with game audio never mutes', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   const vs = run(d, [...seq(60, {}), ...seq(45, { scoreboardVis: 0, logoVis: 0, gameSim: 0.85, adProb: 0.1 }, 60)]);
   assert.equal(firstT(vs, 'COMMERCIAL'), undefined);
 });
 
 test('black cut shortly after the scoreboard leaves mutes immediately', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   run(d, seq(2, { ...AD, adProb: 0.1 }, 60));
   const v = d.step({ ...AD, adProb: 0.1, blackCut: true, t: 62 });
@@ -38,7 +41,7 @@ test('black cut shortly after the scoreboard leaves mutes immediately', () => {
 });
 
 test('black cut long after the scoreboard left still mutes: play never cuts to black', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   run(d, seq(70, { scoreboardVis: 0, logoVis: 0, gameSim: 0.85, adProb: 0.1 }, 60));
   const v = d.step({ scoreboardVis: 0, logoVis: 0, gameSim: 0.85, adProb: 0.1, speech: 0.8, music: 0.1, blackCut: true, t: 130 });
@@ -47,7 +50,7 @@ test('black cut long after the scoreboard left still mutes: play never cuts to b
 });
 
 test('black cut while the scoreboard is still visible does nothing', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   const v = d.step({ ...GAME, blackCut: true, t: 60 });
   assert.equal(v.state, 'GAME');
@@ -55,7 +58,7 @@ test('black cut while the scoreboard is still visible does nothing', () => {
 });
 
 test('a cut mid-second (scoreboard still in that second\'s other frame) mutes on the next second', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   assert.equal(d.step({ ...GAME, blackCut: true, t: 60 }).state, 'GAME');
   const v = d.step({ ...AD, adProb: 0.1, blackCut: false, t: 61 });
@@ -64,7 +67,7 @@ test('a cut mid-second (scoreboard still in that second\'s other frame) mutes on
 });
 
 test('ad-to-ad black cut 37 s after the scoreboard left still mutes (live log 2026-10-25, t=220)', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   // A talking ad: adProb hovers below the vote line, so neither audio rule fires before the cut.
   run(d, seq(36, { scoreboardVis: 0.3, logoVis: 0.3, gameSim: 0.5, adProb: 0.4, speech: 0.45, music: 0.02 }, 60));
@@ -74,7 +77,7 @@ test('ad-to-ad black cut 37 s after the scoreboard left still mutes (live log 20
 });
 
 test('visible logo holds GAME even with ad-like audio', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   const vs = run(d, seq(30, { ...AD, logoVis: 0.9 }, 60));
   assert.equal(firstT(vs, 'COMMERCIAL'), undefined);
@@ -82,7 +85,7 @@ test('visible logo holds GAME even with ad-like audio', () => {
 });
 
 test('logo alone cannot leave COMMERCIAL', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   assert.equal(d.state, 'COMMERCIAL');
   const vs = run(d, seq(20, { ...AD, logoVis: 0.95 }, 70));
@@ -90,7 +93,7 @@ test('logo alone cannot leave COMMERCIAL', () => {
 });
 
 test('sustained game audio leaves COMMERCIAL on the 10th speaking sample (10 of 12)', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   const vs = run(d, seq(10, { ...AD, gameSim: 0.8 }, 70));
   assert.ok(vs.slice(0, 9).every(v => v.state === 'COMMERCIAL'));
@@ -100,7 +103,7 @@ test('sustained game audio leaves COMMERCIAL on the 10th speaking sample (10 of 
 });
 
 test('a 30 s talking ad that sounds like the game for 8 of 12 s stays COMMERCIAL', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   // live log 2026-10-25 18:11, t=267-276: .94 .70 .86 .89 1 1 .78 .41 .62 .70 ...
   const sims = [0.94, 0.70, 0.86, 0.89, 1, 1, 0.78, 0.41, 0.62, 0.70, 0.34, 0.38, 0.08, 0.27, 0.09, 0.24];
@@ -109,7 +112,7 @@ test('a 30 s talking ad that sounds like the game for 8 of 12 s stays COMMERCIAL
 });
 
 test('scoreboard hovering at 0.42 inside a break never recovers; 0.5 for 3 frames does', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   const hover = run(d, seq(6, { ...AD, scoreboardVis: 0.42 }, 70));
   assert.ok(hover.every(v => v.state === 'COMMERCIAL'));
@@ -120,7 +123,7 @@ test('scoreboard hovering at 0.42 inside a break never recovers; 0.5 for 3 frame
 });
 
 test('flap guard: an audio recovery that re-mutes within 20 s locks audio recovery until the scoreboard returns', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   const talk = run(d, seq(10, { ...AD, gameSim: 0.9 }, 70));
   assert.equal(talk[9].state, 'GAME'); assert.equal(talk[9].reason, 'audio');
@@ -138,13 +141,13 @@ test('flap guard: an audio recovery that re-mutes within 20 s locks audio recove
 });
 
 test('flap guard does not apply after a scoreboard recovery, nor in audio-only mode', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   assert.equal(d.step({ ...GAME, t: 70 }).reason, 'scoreboard');
   run(d, seq(6, AD, 71));                                      // re-mute 6 s after a *scoreboard* recovery
   const talk = run(d, seq(10, { ...AD, gameSim: 0.9 }, 77));
   assert.equal(talk[9].state, 'GAME');
-  const a = new Detector();
+  const a = new Detector(FAST);
   const blind = { scoreboardVis: null, logoVis: null };
   run(a, [...seq(60, blind), ...seq(15, { ...blind, gameSim: 0.1, adProb: 0.9 }, 60)]);
   run(a, seq(10, { ...blind, gameSim: 0.9, adProb: 0.1 }, 75));
@@ -156,7 +159,7 @@ test('flap guard does not apply after a scoreboard recovery, nor in audio-only m
 });
 
 test('quiet ad seconds (ambient: no speech, no music) never count toward audio recovery', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   // Live log 2026-10-25 t=236-248: a near-silent ad scored gameSim 0.8-1.0 and un-muted the break.
   const quiet = run(d, seq(12, { ...AD, gameSim: 0.95, speech: 0.05, music: 0.1 }, 70));
@@ -167,7 +170,7 @@ test('quiet ad seconds (ambient: no speech, no music) never count toward audio r
 });
 
 test('talky ad with intermittent game-like audio stays COMMERCIAL', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   const sims = [0.8, 0.8, 0.2, 0.8, 0.2, 0.2];
   const vs = run(d, sims.map((gameSim, i) => ({ ...AD, gameSim, t: 70 + i })));
@@ -175,7 +178,7 @@ test('talky ad with intermittent game-like audio stays COMMERCIAL', () => {
 });
 
 test('a partly visible scoreboard for 3 s resets the gone timer', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   run(d, seq(2, { scoreboardVis: 0, logoVis: 0 }, 60));
   const dips = run(d, seq(3, { scoreboardVis: 0.5, logoVis: 0 }, 62));
@@ -185,7 +188,7 @@ test('a partly visible scoreboard for 3 s resets the gone timer', () => {
 });
 
 test('ambient sound in the first 30 s gone does not count toward the ad streak', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   const ambient = run(d, seq(10, { ...AD, speech: 0.1, music: 0.1 }, 60));
   assert.ok(ambient.every(v => v.state === 'GAME'));
@@ -194,7 +197,7 @@ test('ambient sound in the first 30 s gone does not count toward the ad streak',
 });
 
 test('cold start: no audio profile yet, 40 s of absence mutes', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, { adProb: null, gameSim: null }));
   const vs = run(d, seq(40, { scoreboardVis: 0, logoVis: 0, adProb: null, gameSim: null }, 60));
   assert.ok(vs.slice(0, 39).every(v => v.state === 'GAME'));
@@ -203,7 +206,7 @@ test('cold start: no audio profile yet, 40 s of absence mutes', () => {
 });
 
 test('audio-only mode (no video): sustained ad probability mutes after 12 s, game audio recovers', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, { scoreboardVis: null, logoVis: null }));
   const vs = run(d, seq(15, { scoreboardVis: null, logoVis: null, gameSim: 0.1, adProb: 0.9 }, 60));
   assert.ok(vs.slice(0, 9).every(v => v.state === 'GAME'));
@@ -214,7 +217,7 @@ test('audio-only mode (no video): sustained ad probability mutes after 12 s, gam
 });
 
 test('no audio track: scoreboard-only with the 40 s rule, fast recovery at 0.85', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   const base = { adProb: null, gameSim: null, speech: 0, music: 0 };
   run(d, seq(60, base));
   const vs = run(d, seq(40, { ...base, scoreboardVis: 0, logoVis: 0 }, 60));
@@ -224,7 +227,7 @@ test('no audio track: scoreboard-only with the 40 s rule, fast recovery at 0.85'
 });
 
 test('max commercial length forces GAME', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, [...seq(60, {}), ...seq(10, AD, 60)]);
   const vs = run(d, seq(240, { ...AD, adProb: 0.9, gameSim: 0.1 }, 70));
   const t = firstT(vs, 'GAME');
@@ -236,11 +239,30 @@ test('custom goneSec shifts the clean-break transition', () => {
   const d = new Detector({ goneSec: 5 });
   const vs = run(d, [...seq(60, {}), ...seq(20, AD, 60)]);
   assert.equal(firstT(vs, 'COMMERCIAL'), 66);
-  assert.equal(DEFAULTS.goneSec, 3);
+  assert.equal(DEFAULTS.goneSec, 45);
+});
+
+test('default: ad-like announcer audio while the bug is off for 40 s (live kick, stat graphic) never mutes', () => {
+  const d = new Detector();
+  run(d, seq(60, {}));
+  const vs = run(d, seq(40, { scoreboardVis: 0.2, logoVis: 0.5, adProb: 1, gameSim: 0.3, speech: 0.45, music: 0.02 }, 60));
+  assert.equal(firstT(vs, 'COMMERCIAL'), undefined);
+});
+
+test('default: a black cut mutes at once; audio alone only once the bug has been gone 45 s', () => {
+  const cut = new Detector();
+  run(cut, seq(60, {}));
+  run(cut, seq(2, AD, 60));
+  assert.equal(cut.step({ ...AD, blackCut: true, t: 62 }).reason, 'black-cut');
+
+  const d = new Detector();
+  const vs = run(d, [...seq(60, {}), ...seq(60, AD, 60)]);
+  assert.equal(firstT(vs, 'COMMERCIAL'), 106);
+  assert.equal(vs[106].reason, 'audio');
 });
 
 test('mildly ad-like audio (never ≥ 0.75) is caught by a majority vote, but only once the scoreboard has been gone 10 s', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   const vs = run(d, seq(20, { ...AD, adProb: 0.6 }, 60));
   const t = firstT(vs, 'COMMERCIAL');
@@ -250,14 +272,14 @@ test('mildly ad-like audio (never ≥ 0.75) is caught by a majority vote, but on
 });
 
 test('nine seconds of mildly ad-like audio with the scoreboard gone never votes', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   const vs = run(d, seq(9, { ...AD, adProb: 0.6 }, 60));
   assert.ok(vs.every(v => v.state === 'GAME'));
 });
 
 test('a short produced package (8 s of mildly ad-like audio) never mutes', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   const vs = run(d, seq(8, { ...AD, adProb: 0.6 }, 60));
   assert.ok(vs.every(v => v.state === 'GAME'));
@@ -266,7 +288,7 @@ test('a short produced package (8 s of mildly ad-like audio) never mutes', () =>
 });
 
 test('announcer-level speech (0.45) is not ambient: ambientMax is 0.2', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, {}));
   // announcer-level speech (0.45) with ad-like audio must count toward the streak
   const vs = run(d, seq(6, { ...AD, speech: 0.45, music: 0.0, adProb: 0.9 }, 60));
@@ -275,7 +297,7 @@ test('announcer-level speech (0.45) is not ambient: ambientMax is 0.2', () => {
 });
 
 test('audio-only mode also mutes on a majority vote: 10 of the last 15 s with adProb ≥ 0.5', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, { scoreboardVis: null, logoVis: null }));
   // never 15 consecutive ≥ 0.75, but 12 of 15 ≥ 0.5
   const probs = [0.6, 0.9, 0.4, 0.6, 0.8, 0.6, 0.3, 0.7, 0.9, 0.6, 0.6, 0.5, 0.8, 0.4, 0.6, 0.7];
@@ -287,7 +309,7 @@ test('audio-only mode also mutes on a majority vote: 10 of the last 15 s with ad
 });
 
 test('audio-only mode: scattered mild ad probability during play never votes', () => {
-  const d = new Detector();
+  const d = new Detector(FAST);
   run(d, seq(60, { scoreboardVis: null, logoVis: null }));
   const probs = [0.5, 0.1, 0.0, 0.0, 0.4, 0.1, 0.4, 0.2, 0.4, 0.5, 0.5, 0.8, 0.3, 0.5, 0.1, 0.2, 0.3];
   const vs = run(d, probs.map((adProb, i) => ({ ...AD, scoreboardVis: null, logoVis: null, adProb, gameSim: 1 - adProb, t: 60 + i })));

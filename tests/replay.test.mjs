@@ -6,7 +6,7 @@ import { replay, parseOverrides } from '../tools/replay.mjs';
 const log = JSON.parse(readFileSync(new URL('./fixtures/mini-log.json', import.meta.url), 'utf8'));
 
 test('replay reports transitions and scores against labels', () => {
-  const r = replay(log);
+  const r = replay(log, { goneSec: 3 }); // the mini log was built for the original 3 s threshold
   assert.deepEqual(r.transitions.map(x => [x.t, x.state]), [[64, 'COMMERCIAL'], [100, 'GAME']]);
   assert.equal(r.adHeardSec, 4);
   assert.equal(r.gameMutedSec, 0);
@@ -25,5 +25,5 @@ test('parseOverrides reads --set key=value pairs as numbers', () => {
 test('labels without an explicit t fall back to timestamps relative to start', () => {
   const l2 = structuredClone(log);
   for (const e of l2.events) delete e.data.t;
-  assert.equal(replay(l2).adHeardSec, 4);
+  assert.equal(replay(l2, { goneSec: 3 }).adHeardSec, 4);
 });
