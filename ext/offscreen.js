@@ -191,6 +191,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   else if (msg.type === 'testStart') { testStart().then(sendResponse, (e) => sendResponse({ ok: false, error: e.message })); return true; } // TEST-ONLY
   else if (msg.type === 'settings') { settings = mergeSettings(msg.settings); if (pipeline) pipeline.setShadow(settings.shadow); }
   else if (msg.type === 'override' && pipeline) pipeline.override(msg.kind);
+  else if (msg.type === 'relearn' && pipeline) pipeline.relearn(msg.why);
   else if (msg.type === 'label' && log) log.event('label', { label: msg.label });
   else if (msg.type === 'exportLog') { sendResponse(log ? log.toJSON() : null); return true; }
   else if (msg.type === 'thumbnail') {

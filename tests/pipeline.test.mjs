@@ -91,6 +91,16 @@ test('scoreboard lost for 60 s while audio still says game triggers a relearn ev
   assert.ok(parts.log.toJSON().events.some(e => e.name === 'relearn'));
 });
 
+test('relearn() (fullscreen / window resize) restarts scoreboard learning and logs why', () => {
+  const { p, parts } = setup();
+  p.tick(7, pcm(0.1));
+  p.relearn('layout');
+  assert.equal(parts.learner.resets, 1);
+  assert.deepEqual(parts.log.toJSON().events.find(e => e.name === 'relearn').data, { t: 7, why: 'layout' });
+  p.onFrame(frame(255, 255));
+  assert.equal(p.tick(8, pcm(0.1)).scoreboardVis, null); // no vision until it has learned again
+});
+
 test('before the scoreboard is learned, the first 45 s of audio bootstrap the game bank', () => {
   const { p, parts } = setup();
   parts.learner.learned = false;

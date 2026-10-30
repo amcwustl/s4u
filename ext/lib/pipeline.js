@@ -21,10 +21,12 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
   const o = { ...PIPELINE_DEFAULTS, ...opts };
   let frames = []; // gray frames since the last tick
   let lostSec = 0;
+  let lastT = 0;
 
   function onFrame(gray) { frames.push(gray); }
 
   function tick(t, pcm) {
+    lastT = t;
     // --- vision
     let scoreboardVis = null, logoVis = null, minLum = null;
     if (frames.length) {
@@ -79,7 +81,7 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
     // --- relearn when the learned layout is gone for a long stretch of game
     if (learner.learned && verdict.state === 'GAME' && scoreboardVis !== null && scoreboardVis < o.relearnVis) lostSec++;
     else lostSec = 0;
-    if (lostSec >= o.relearnSec) { learner.reset(); lostSec = 0; log.event('relearn', { t }); }
+    if (lostSec >= o.relearnSec) relearn('lost');
 
     const record = {
       ...sample, verdict, muted: controller.muted, shadow: controller.shadow, paused: controller.paused,
@@ -90,6 +92,12 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
     else if (o.keepEmbedding && feats?.embedding) record.embedding = feats.embedding; // Float32Array; rounded at export
     log.push(record);
     return record;
+  }
+
+  /** Start scoreboard learning over: the layout changed (fullscreen, window resize) or was lost for long. */
+  function relearn(why) {
+    learner.reset(); lostSec = 0;
+    log.event('relearn', { t: lastT, why });
   }
 
   function override(kind) {
@@ -111,5 +119,5 @@ export function createPipeline({ learner, detector, controller, gameBank, adBank
     log.event('shadow', { shadow: controller.shadow });
   }
 
-  return { onFrame, tick, override, end, setShadow, toGray };
+  return { onFrame, tick, relearn, override, end, setShadow, toGray };
 }

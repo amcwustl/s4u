@@ -175,6 +175,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   // from content script badge
   if (msg?.type === 'override' && sender.tab) toOffscreen({ type: 'override', kind: msg.kind });
+  if (msg?.type === 'layout' && sender.tab) getArmedTabId().then((id) => { if (id === sender.tab.id) toOffscreen({ type: 'relearn', why: 'layout' }); });
 });
 
 chrome.runtime.onConnect.addListener((port) => {

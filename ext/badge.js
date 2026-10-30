@@ -6,7 +6,17 @@
   // Only the frame that actually holds the playing video renders the badge.
   function hasVideo() { return [...document.querySelectorAll('video')].some(v => v.videoWidth > 0); }
 
-  let host = null, root = null, hideTimer = null;
+  let host = null, root = null, hideTimer = null, armed = false, layoutTimer = null;
+
+  // Fullscreen on/off or a window resize moves everything on screen: the learned scoreboard is stale.
+  // Wait for the layout to settle, then have the armed tab learn it again.
+  function layoutChanged() {
+    if (!armed) return;
+    clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(() => chrome.runtime.sendMessage({ type: 'layout' }).catch(() => {}), 1500);
+  }
+  document.addEventListener('fullscreenchange', layoutChanged);
+  window.addEventListener('resize', layoutChanged);
   function ensure() {
     if (host) return;
     host = document.createElement('div');
@@ -43,6 +53,7 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type !== 'badge') return;
+    armed = msg.text !== 'Off';
     if (!hasVideo()) return;
     ensure();
     const box = root.querySelector('.b'), dot = root.querySelector('.dot');
@@ -56,6 +67,7 @@
     clearTimeout(hideTimer);
     if (state === 'off') { box.classList.add('hidden'); return; }
     box.classList.remove('hidden');
-    if (state === 'game') hideTimer = setTimeout(() => box.classList.add('hidden'), 4000);
+    // Hidden while learning too: a badge that stays on screen gets learned as part of the broadcast graphics.
+    if (state === 'game' || state === 'learning') hideTimer = setTimeout(() => box.classList.add('hidden'), 4000);
   });
 })();
